@@ -1,5 +1,5 @@
 using System;
-using Domain.Inerfaces;
+using Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;

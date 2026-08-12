@@ -1,5 +1,5 @@
 using Domain.Entities;
-using Domain.Inerfaces;
+using Domain.Interfaces;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +10,7 @@ public class MovieRepository : BaseRepository<Movie>, IMovieRepository
     private readonly CinemAPIContext _context;
     public MovieRepository(CinemAPIContext context) : base(context)
     {
+        _context = context;
     }
 
     public async Task<IEnumerable<Movie>> GetActiveMovies()

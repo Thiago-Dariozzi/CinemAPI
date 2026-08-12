@@ -1,7 +1,8 @@
 using System;
 using Domain.Entities;
+using Domain.Interfaces;
 
-namespace Domain.Inerfaces;
+namespace Domain.Interfaces;
 
 public interface IUserRepository : IBaseRepository<User>
 {

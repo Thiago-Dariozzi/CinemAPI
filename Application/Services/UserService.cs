@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using Domain.Entities;
-using Domain.Inerfaces;
+using Domain.Interfaces;
 
 namespace Application.Services;
 

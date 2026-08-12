@@ -1,5 +1,5 @@
 using Application.Services;
-using Domain.Inerfaces;
+using Domain.Interfaces;
 using Infrastructure;
 using Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +10,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173") // <-- La URL exacta de tu frontend
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 
 var connectionString = builder.Configuration.GetConnectionString("CinemaConnection");
 builder.Services.AddDbContext<CinemAPIContext>(options =>
@@ -19,9 +29,13 @@ builder.Services.AddDbContext<CinemAPIContext>(options =>
 #region Injections
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<MovieService>();
+builder.Services.AddScoped<ScreenService>();
+builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMovieRepository, MovieRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IScreenRepository, ScreenRepository>();
+builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 #endregion
 
 var app = builder.Build();
@@ -32,10 +46,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.MapControllers();
-app.Run();
+// 2. ACTIVAMOS EL CORS (Debe ir antes de MapControllers)
+app.UseCors("AllowReactApp");
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.MapControllers();
+
+app.Run();

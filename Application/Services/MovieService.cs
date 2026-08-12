@@ -1,6 +1,7 @@
 using System;
-using Domain.Inerfaces;
+using Domain.Interfaces;
 using Domain.Entities;
+using Application.Services;
 
 
 namespace Application.Services;

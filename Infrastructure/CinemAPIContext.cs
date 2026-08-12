@@ -10,7 +10,8 @@ public class CinemAPIContext : DbContext
     }
 
     public DbSet<Movie> Movies { get; set; }
-
+    public DbSet<Screen> Screens { get; set; }
+    public DbSet<Ticket> Tickets { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -25,6 +26,23 @@ public class CinemAPIContext : DbContext
             entity.Property(e => e.Genre).HasMaxLength(50);
             entity.Property(e => e.ImageUrl);
             entity.Property(e => e.ReleaseDate);
+            entity.Property(e => e.IsActive);
+        });
+        modelBuilder.Entity<Screen>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Capacity);
+            entity.Property(e => e.IsActive);
+        });
+        modelBuilder.Entity<Ticket>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MovieId);
+            entity.Property(e => e.ScreenId);
+            entity.Property(e => e.UserId);
+            entity.Property(e => e.BuyDate);
+            entity.Property(e => e.FinalPrice);
             entity.Property(e => e.IsActive);
         });
     }
