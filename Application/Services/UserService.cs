@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using Domain.Entities;
 using Domain.Interfaces;
 
@@ -15,5 +14,33 @@ public class UserService
     {
         return  await _repo.GetByEmail(email);
     }
+
+    public async Task<IEnumerable<User>> GetAll()
+    {
+        return await _repo.GetAll();
+    }
+
+    public async Task<User?> GetById(Guid id)
+    {
+        
+        return await _repo.GetById(id);
+    }
+
+    public async Task<User> Add(User user)
+    {
+        user.Id = Guid.NewGuid();
+        return await _repo.Add(user);
+    }
+
+    public async Task Update(User user)
+    {
+         await _repo.Update(user);
+    }
+
+    public async Task Delete(Guid id)
+    {
+        await _repo.Delete(id);
+    }
+
 
 }
