@@ -6,14 +6,27 @@ namespace Infrastructure.Repositories;
 
 public class UserRepository : BaseRepository<User>, IUserRepository
 {
-    private readonly CinemAPIContext _context;
     public UserRepository(CinemAPIContext context) : base(context)
     {
-        _context = context;
     }
+
+    public new async Task<IEnumerable<User>> GetAll()
+    {
+        return await _context.Users
+        .Where(u => u.IsActive)
+        .ToListAsync();
+    }
+
+    public new async Task<User?> GetById(Guid id)
+    {
+        return await _context.Users
+        .FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
+    }
+
     public async Task<User?> GetByEmail(string email)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        return await _context.Users
+        .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && u.IsActive);
     }
 
 }

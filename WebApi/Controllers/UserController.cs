@@ -1,5 +1,6 @@
 using System;
 using Microsoft.AspNetCore.Mvc;
+using Application.DTOs;
 using Application.Services;
 using Domain.Entities;
 
@@ -21,7 +22,7 @@ public class UserController : ControllerBase
     public async Task<IActionResult> GetUsers()
     {
         var users = await _userService.GetAll();
-        return Ok(users);
+        return Ok(users.Select(ToDto));
     }
 
     // GET: api/user/{id}
@@ -33,7 +34,7 @@ public class UserController : ControllerBase
         {
             return NotFound();
         }
-        return Ok(user);
+        return Ok(ToDto(user));
     }
 
     // GET: api/user/email/{email}
@@ -45,7 +46,7 @@ public class UserController : ControllerBase
         {
             return NotFound();
         }
-        return Ok(user);
+        return Ok(ToDto(user));
     }
 
     // POST: api/user
@@ -59,8 +60,11 @@ public class UserController : ControllerBase
         }
 
         var created = await _userService.Add(user);
-        return CreatedAtAction(nameof(GetUser), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(GetUser), new { id = created!.Id }, ToDto(created));
     }
+
+    private static UserResponseDto ToDto(User user) =>
+        new(user.Id, user.Name, user.Email, user.Role, user.IsActive);
 
     // PUT: api/user/{id}
     [HttpPut("{id}")]

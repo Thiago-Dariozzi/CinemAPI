@@ -13,6 +13,7 @@ public class CinemAPIContext : DbContext
     public DbSet<Screen> Screens { get; set; }
     public DbSet<Ticket> Tickets { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<Showtime> Showtimes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +51,14 @@ public class CinemAPIContext : DbContext
             entity.HasOne<Movie>().WithMany().HasForeignKey(e => e.MovieId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Screen>().WithMany().HasForeignKey(e => e.ScreenId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Showtime>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne<Movie>().WithMany().HasForeignKey(e => e.MovieId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Screen>().WithMany().HasForeignKey(e => e.ScreenId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
