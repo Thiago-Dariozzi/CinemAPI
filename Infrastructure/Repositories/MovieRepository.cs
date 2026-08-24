@@ -7,10 +7,21 @@ namespace Infrastructure.Repositories;
 
 public class MovieRepository : BaseRepository<Movie>, IMovieRepository
 {
-    private readonly CinemAPIContext _context;
     public MovieRepository(CinemAPIContext context) : base(context)
     {
-        _context = context;
+    }
+
+    public new async Task<IEnumerable<Movie>> GetAll()
+    {
+        return await _context.Movies
+        .Where(m => m.IsActive)
+        .ToListAsync();
+    }
+
+    public new async Task<Movie?> GetById(Guid id)
+    {
+        return await _context.Movies
+        .FirstOrDefaultAsync(m => m.Id == id && m.IsActive);
     }
 
     public async Task<IEnumerable<Movie>> GetActiveMovies()

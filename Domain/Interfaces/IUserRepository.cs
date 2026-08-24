@@ -6,5 +6,5 @@ namespace Domain.Interfaces;
 
 public interface IUserRepository : IBaseRepository<User>
 {
-    Task<User>? GetByEmail(string email);
+    Task<User?> GetByEmail(string email);
 }

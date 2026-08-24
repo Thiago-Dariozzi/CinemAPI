@@ -1,9 +1,8 @@
 using Application.Services;
 using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace WebApi.Controllers;
 
@@ -43,9 +42,10 @@ public class MovieController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<Movie?> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id)
     {
-        return await _movieService.GetById(id);
+        var movie = await _movieService.GetById(id);
+        return movie == null ? NotFound() : Ok(movie);
     }
 
     [HttpPost]
@@ -55,14 +55,33 @@ public class MovieController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id)
     {
-        await _movieService.Delete(id);   
+        var existing = await _movieService.GetById(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+ 
+        await _movieService.Delete(id);
+        return NoContent();
     }
 
-    [HttpPut]
-    public async Task Update([FromBody] Movie movie)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] Movie movie)
     {
+        if (id != movie.Id)
+        {
+            return BadRequest("El id de la ruta no coincide con el id de la película.");
+        }
+
+        var existing = await _movieService.GetById(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         await _movieService.Update(movie);
+        return NoContent();
     }
 }
