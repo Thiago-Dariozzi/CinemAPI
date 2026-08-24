@@ -49,7 +49,12 @@ public class MovieService
 
     public async Task Delete(Guid id)
     {
-        await _repo.Delete(id);   
+        var movie = await _repo.GetById(id);
+        if (movie != null)
+        {
+            movie.IsActive = false;
+            await _repo.Update(movie);
+        }
     }
     public async Task Update(Movie movie)
     {
