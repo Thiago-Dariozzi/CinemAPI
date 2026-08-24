@@ -32,6 +32,9 @@ public class TicketRepository : BaseRepository<Ticket>, ITicketRepository
 
     public new async Task Update(Ticket ticket)
     {
+        // Ver comentario equivalente en BaseRepository.Update: evita el conflicto de
+        // tracking con la instancia que dejó trackeada el GetById del controller.
+        _context.ChangeTracker.Clear();
         _context.Tickets.Update(ticket);
         await _context.SaveChangesAsync();
     }

@@ -41,6 +41,11 @@ public abstract class BaseRepository<T> : IBaseRepository<T> where T : class
     }
     public async Task Update(T entity)
     {
+        // Los controllers suelen hacer GetById(id) antes de llamar a Update (para
+        // validar existencia/404), lo que deja trackeada OTRA instancia con el mismo Id.
+        // Sin este Clear(), adjuntar "entity" tira "cannot be tracked because another
+        // instance with the same key value is already being tracked".
+        _context.ChangeTracker.Clear();
         _context.Set<T>().Update(entity);
         await _context.SaveChangesAsync();
     }

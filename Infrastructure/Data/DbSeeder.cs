@@ -91,6 +91,7 @@ public static class DbSeeder
                     .RuleFor(s => s.MovieId, f => movie.Id)
                     .RuleFor(s => s.ScreenId, f => f.PickRandom(screens).Id)
                     .RuleFor(s => s.StartTime, f => f.Date.Soon(14).Date.AddHours(f.Random.Int(12, 22)))
+                    .RuleFor(s => s.Price, f => f.Random.Decimal(5, 25))
                     .RuleFor(s => s.IsActive, f => true)
                     .Generate(3);
                 showtimes.AddRange(showtimesForMovie);

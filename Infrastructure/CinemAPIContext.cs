@@ -56,6 +56,7 @@ public class CinemAPIContext : DbContext
         modelBuilder.Entity<Showtime>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Price).HasPrecision(10, 2);
 
             entity.HasOne<Movie>().WithMany().HasForeignKey(e => e.MovieId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Screen>().WithMany().HasForeignKey(e => e.ScreenId).OnDelete(DeleteBehavior.Restrict);

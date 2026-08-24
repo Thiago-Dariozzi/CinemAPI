@@ -33,6 +33,9 @@ public class ScreenRepository : BaseRepository<Screen>, IScreenRepository
 
     public new async Task Update(Screen screen)
     {
+        // Ver comentario equivalente en BaseRepository.Update: evita el conflicto de
+        // tracking con la instancia que dejó trackeada el GetById del controller.
+        _context.ChangeTracker.Clear();
         _context.Screens.Update(screen);
         await _context.SaveChangesAsync();
     }
