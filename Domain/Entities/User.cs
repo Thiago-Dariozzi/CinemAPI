@@ -9,8 +9,7 @@ public class User
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
 
-    public bool IsActive {get; set;} = true;
     public string Role { get; set; } = "Client";
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
 
 }
