@@ -1,0 +1,71 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "kill-stray-webapi",
+            "detail": "Mata cualquier WebApi.exe huérfano que haya quedado bloqueando los DLLs (ver MSB3027/MSB3021).",
+            "type": "shell",
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-NoProfile",
+                    "-Command",
+                    "Get-Process -Name WebApi -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "pkill -f 'bin/Debug/.*/WebApi(\\.dll)?' || true"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "pkill -f 'bin/Debug/.*/WebApi(\\.dll)?' || true"
+                ]
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "build",
+            "detail": "Build de WebApi. Primero libera cualquier proceso colgado para evitar el error de archivo bloqueado.",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/WebApi/WebApi.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "dependsOn": "kill-stray-webapi",
+            "dependsOrder": "sequence",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "watch",
+            "detail": "dotnet watch run para WebApi, con la misma limpieza previa.",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/WebApi/WebApi.csproj"
+            ],
+            "dependsOn": "kill-stray-webapi",
+            "dependsOrder": "sequence",
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
