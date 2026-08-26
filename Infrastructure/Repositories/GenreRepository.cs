@@ -33,9 +33,7 @@ public class GenreRepository : BaseRepository<Genre>, IGenreRepository
 
     public new async Task Update(Genre genre)
     {
-        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update:
-        // evita el conflicto de tracking con la instancia que dejó trackeada el GetById
-        // del controller.
+        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update.
         _context.ChangeTracker.Clear();
         _context.Genres.Update(genre);
         await _context.SaveChangesAsync();

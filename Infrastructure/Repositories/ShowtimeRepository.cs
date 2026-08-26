@@ -34,9 +34,7 @@ public class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
 
     public new async Task Update(Showtime showtime)
     {
-        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update:
-        // evita el conflicto de tracking con la instancia que dejó trackeada el GetById
-        // del controller (o, en este caso, la propia validación de superposición).
+        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update.
         _context.ChangeTracker.Clear();
         _context.Showtimes.Update(showtime);
         await _context.SaveChangesAsync();

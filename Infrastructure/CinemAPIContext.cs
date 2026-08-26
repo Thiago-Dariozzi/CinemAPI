@@ -40,17 +40,14 @@ public class CinemAPIContext : DbContext
         {
             entity.HasKey(e => e.Id);
 
-            // Collation accent-insensitive + case-insensitive: así "Acción", "Accion" y
-            // "ACCION" comparan igual también a nivel de base (última línea de defensa,
-            // GenreService ya valida esto mismo antes de llegar acá). No cambia cómo se
-            // guarda/lee el string (sigue con sus tildes), solo cómo se compara/ordena.
+            // Collation accent-insensitive + case-insensitive: "Acción", "Accion" y
+            // "ACCION" comparan igual también a nivel de base, como última línea de
+            // defensa. No cambia cómo se guarda/lee el string, solo cómo se compara.
             entity.Property(e => e.Name).IsRequired().HasMaxLength(50).UseCollation("Modern_Spanish_CI_AI");
 
-            // Filtrado a IsActive = 1: con soft delete, un género dado de baja sigue
-            // existiendo en la tabla, así que un índice único sin filtro chocaría contra
-            // sí mismo apenas alguien reactive/reuse ese nombre. Coherente con
-            // GenreRepository.GetAll() (y por lo tanto EnsureNoDuplicate), que también
-            // solo mira activos.
+            // Filtrado a IsActive = 1: con soft delete, un género dado de baja sigue en
+            // la tabla, así que sin el filtro el índice chocaría contra sí mismo apenas
+            // se reuse ese nombre.
             entity.HasIndex(e => e.Name).IsUnique().HasFilter("[IsActive] = 1");
         });
 

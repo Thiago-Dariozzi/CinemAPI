@@ -43,8 +43,6 @@ public class ShowtimeController : ControllerBase
     }
 
     // GET api/showtime/screen/{screenId}?date=2026-08-27
-    // Horarios ocupados de una sala en una fecha puntual, para que el frontend sepa
-    // qué franjas ya están tomadas al armar una función nueva.
     [HttpGet("screen/{screenId}")]
     public async Task<IActionResult> GetByScreen(Guid screenId, [FromQuery] DateTime date)
     {

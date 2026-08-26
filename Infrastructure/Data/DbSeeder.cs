@@ -11,8 +11,7 @@ public static class DbSeeder
 
     public static async Task SeedAsync(CinemAPIContext context)
     {
-        // Si ya hay películas cargadas, asumimos que Movies/Screens/Users/Tickets ya
-        // fueron sembrados en una corrida anterior.
+        // Si ya hay películas cargadas, asumimos que ya se sembró antes.
         var isFirstSeed = !await context.Movies.AnyAsync();
 
         List<Screen> screens;
@@ -20,7 +19,7 @@ public static class DbSeeder
 
         if (isFirstSeed)
         {
-            // --- Genres --- (uno por nombre, no random: no queremos duplicados)
+            // --- Genres ---
             var genres = GenreNames
                 .Select(name => new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true })
                 .ToList();
@@ -77,16 +76,11 @@ public static class DbSeeder
         }
         else
         {
-            // Base sembrada antes de que existiera Showtime: reusamos las películas/salas
-            // que ya están para poder sembrar los horarios que faltan.
             screens = await context.Screens.ToListAsync();
             movies = await context.Movies.ToListAsync();
         }
 
-        // --- Showtimes (funciones): unos horarios de ejemplo por película, para que el
-        // panel de Usuario tenga algo para elegir al armar un ticket. Se siembran aparte
-        // (con su propio chequeo de "¿ya hay algo?") para no depender de que Movies
-        // estuviera vacía: en una base que ya tenía datos, esto la completa una sola vez.
+        // --- Showtimes (funciones) ---
         if (!await context.Showtimes.AnyAsync() && movies.Count > 0 && screens.Count > 0)
         {
             var showtimes = new List<Showtime>();

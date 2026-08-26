@@ -17,7 +17,6 @@ public class GenreController : ControllerBase
         _genreService = genreService;
     }
 
-    // GET: api/genre
     [HttpGet]
     public async Task<IActionResult> GetGenres()
     {
@@ -25,7 +24,6 @@ public class GenreController : ControllerBase
         return Ok(genres);
     }
 
-    // GET: api/genre/{id}
     [HttpGet("{id}")]
     public async Task<IActionResult> GetGenre(Guid id)
     {
@@ -37,7 +35,6 @@ public class GenreController : ControllerBase
         return Ok(genre);
     }
 
-    // POST: api/genre
     [HttpPost]
     public async Task<IActionResult> CreateGenre([FromBody] Genre genre)
     {
@@ -52,7 +49,6 @@ public class GenreController : ControllerBase
         }
     }
 
-    // PUT: api/genre/{id}
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateGenre(Guid id, [FromBody] Genre genre)
     {
@@ -78,7 +74,6 @@ public class GenreController : ControllerBase
         }
     }
 
-    // DELETE: api/genre/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteGenre(Guid id)
     {

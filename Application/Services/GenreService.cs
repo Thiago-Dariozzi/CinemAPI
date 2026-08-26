@@ -52,7 +52,6 @@ public class GenreService
         var genre = await _repo.GetById(id);
         if (genre == null) return;
 
-        // Solo se puede dar de baja un género que no tenga ninguna película asignada.
         var moviesUsingGenre = await _movieRepo.GetByGenre(id);
         var moviesCount = moviesUsingGenre.Count();
         if (moviesCount > 0)

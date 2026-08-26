@@ -7,8 +7,8 @@ namespace Application.Services;
 
 public class ShowtimeService
 {
-    // Margen de limpieza que se suma a la duración de la película para calcular el
-    // tramo que ocupa una función en la sala. Constante fácil de ajustar.
+    // Minutos de limpieza que se suman a la duración de la película para calcular el
+    // tramo real que ocupa una función en la sala.
     private const int CLEANING_BUFFER_MINUTES = 15;
 
     private readonly IShowtimeRepository _repo;
@@ -64,13 +64,11 @@ public class ShowtimeService
         }
     }
 
-    // Valida que la función no se pise con otra función activa de la MISMA sala.
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
-    // + CLEANING_BUFFER_MINUTES], y dos tramos chocan si se cruzan aunque sea
-    // parcialmente (tocarse en el borde, ej. una termina justo cuando otra arranca, no
-    // cuenta como choque). Solo se comparan funciones del mismo día calendario que
-    // StartTime: alcanza para este dominio, donde no hay funciones que crucen la
-    // medianoche.
+    // + CLEANING_BUFFER_MINUTES]; dos tramos chocan si se cruzan aunque sea
+    // parcialmente (tocarse justo en el borde no cuenta como choque). Solo compara
+    // funciones del mismo día calendario que StartTime: no hay funciones que crucen
+    // la medianoche.
     private async Task ValidateNoOverlap(Showtime showtime)
     {
         var movie = await _movieRepo.GetById(showtime.MovieId);
@@ -84,8 +82,6 @@ public class ShowtimeService
 
         var candidates = await _repo.GetByScreenAndDate(showtime.ScreenId, newStart.Date);
 
-        // Cache de películas ya resueltas, para no repetir la consulta si varias
-        // funciones candidatas son de la misma película.
         var movieCache = new Dictionary<Guid, Movie?> { [movie.Id] = movie };
 
         foreach (var other in candidates)

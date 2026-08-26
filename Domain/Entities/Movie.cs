@@ -12,10 +12,8 @@ public class Movie
     public string ImageUrl { get; set; } = string.Empty;
     public DateTime ReleaseDate { get; set; }
 
-    // Precio "sugerido" de catálogo: es solo un valor de conveniencia para precargar
-    // el precio al armar una función nueva en el frontend. No tiene ninguna lógica de
-    // negocio ni validación asociada; el precio real de venta sigue siendo Showtime.Price,
-    // que siempre se puede editar función por función.
+    // Solo un valor de conveniencia para precargar el precio de una función nueva; el
+    // precio real de venta sigue siendo Showtime.Price, editable función por función.
     public decimal? SuggestedPrice { get; set; }
 
     public bool IsActive { get; set; } = true;
