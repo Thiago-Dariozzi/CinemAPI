@@ -23,10 +23,10 @@ public class MovieController : ControllerBase
         return await _movieService.GetActiveMovies();
     }
 
-    [HttpGet("genre/{genre}")]
-    public async Task<IEnumerable<Movie>> GetByGenre(string genre)
+    [HttpGet("genre/{genreId}")]
+    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
     {
-        return await _movieService.GetByGenre(genre);
+        return await _movieService.GetByGenre(genreId);
     }
 
     [HttpGet("title/{title}")]

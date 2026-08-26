@@ -19,9 +19,9 @@ public class MovieService
         return await _repo.GetActiveMovies();
     }
 
-    public async Task<IEnumerable<Movie>> GetByGenre(string genre)
+    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
     {
-        return await _repo.GetByGenre(genre);
+        return await _repo.GetByGenre(genreId);
     }
 
     public async Task<IEnumerable<Movie>> GetByTitle(string title)

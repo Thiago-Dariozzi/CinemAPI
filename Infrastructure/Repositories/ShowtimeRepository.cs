@@ -34,6 +34,10 @@ public class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
 
     public new async Task Update(Showtime showtime)
     {
+        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update:
+        // evita el conflicto de tracking con la instancia que dejó trackeada el GetById
+        // del controller (o, en este caso, la propia validación de superposición).
+        _context.ChangeTracker.Clear();
         _context.Showtimes.Update(showtime);
         await _context.SaveChangesAsync();
     }
@@ -52,6 +56,14 @@ public class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
     {
         return await _context.Showtimes
         .Where(s => s.MovieId == movieId && s.IsActive)
+        .OrderBy(s => s.StartTime)
+        .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date)
+    {
+        return await _context.Showtimes
+        .Where(s => s.ScreenId == screenId && s.IsActive && s.StartTime.Date == date.Date)
         .OrderBy(s => s.StartTime)
         .ToListAsync();
     }

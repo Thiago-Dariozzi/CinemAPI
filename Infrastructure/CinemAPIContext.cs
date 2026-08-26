@@ -14,6 +14,7 @@ public class CinemAPIContext : DbContext
     public DbSet<Ticket> Tickets { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<Showtime> Showtimes { get; set; }
+    public DbSet<Genre> Genres { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,13 +25,33 @@ public class CinemAPIContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).IsRequired().HasMaxLength(150);
             entity.Property(e => e.Synopsis).HasMaxLength(5000);
-            entity.Property(e => e.Genre).HasMaxLength(50);
+            entity.Property(e => e.SuggestedPrice).HasPrecision(10, 2);
+
+            entity.HasOne<Genre>().WithMany().HasForeignKey(e => e.GenreId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Screen>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<Genre>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Collation accent-insensitive + case-insensitive: así "Acción", "Accion" y
+            // "ACCION" comparan igual también a nivel de base (última línea de defensa,
+            // GenreService ya valida esto mismo antes de llegar acá). No cambia cómo se
+            // guarda/lee el string (sigue con sus tildes), solo cómo se compara/ordena.
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(50).UseCollation("Modern_Spanish_CI_AI");
+
+            // Filtrado a IsActive = 1: con soft delete, un género dado de baja sigue
+            // existiendo en la tabla, así que un índice único sin filtro chocaría contra
+            // sí mismo apenas alguien reactive/reuse ese nombre. Coherente con
+            // GenreRepository.GetAll() (y por lo tanto EnsureNoDuplicate), que también
+            // solo mira activos.
+            entity.HasIndex(e => e.Name).IsUnique().HasFilter("[IsActive] = 1");
         });
 
         modelBuilder.Entity<User>(entity =>

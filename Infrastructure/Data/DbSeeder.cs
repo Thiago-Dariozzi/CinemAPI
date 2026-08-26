@@ -6,7 +6,7 @@ namespace Infrastructure.Data;
 
 public static class DbSeeder
 {
-    private static readonly string[] Genres =
+    private static readonly string[] GenreNames =
         { "Acción", "Comedia", "Drama", "Terror", "Ciencia Ficción", "Animación", "Romance", "Suspenso" };
 
     public static async Task SeedAsync(CinemAPIContext context)
@@ -20,6 +20,11 @@ public static class DbSeeder
 
         if (isFirstSeed)
         {
+            // --- Genres --- (uno por nombre, no random: no queremos duplicados)
+            var genres = GenreNames
+                .Select(name => new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true })
+                .ToList();
+
             // --- Screens ---
             var screenFaker = new Faker<Screen>("es")
                 .RuleFor(s => s.Id, f => Guid.NewGuid())
@@ -34,7 +39,7 @@ public static class DbSeeder
                 .RuleFor(m => m.Title, f => f.Commerce.ProductName())
                 .RuleFor(m => m.Synopsis, f => f.Lorem.Paragraph(3))
                 .RuleFor(m => m.DurationMinutes, f => f.Random.Int(80, 180))
-                .RuleFor(m => m.Genre, f => f.PickRandom(Genres))
+                .RuleFor(m => m.GenreId, f => f.PickRandom(genres).Id)
                 .RuleFor(m => m.ImageUrl, f => f.Image.PicsumUrl())
                 .RuleFor(m => m.ReleaseDate, f => f.Date.Past(3))
                 .RuleFor(m => m.IsActive, f => true);
@@ -50,6 +55,7 @@ public static class DbSeeder
                 .RuleFor(u => u.IsActive, f => true);
             var users = userFaker.Generate(30);
 
+            await context.Genres.AddRangeAsync(genres);
             await context.Screens.AddRangeAsync(screens);
             await context.Movies.AddRangeAsync(movies);
             await context.Users.AddRangeAsync(users);

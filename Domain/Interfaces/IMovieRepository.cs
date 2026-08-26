@@ -8,5 +8,5 @@ public interface IMovieRepository : IBaseRepository<Movie>
 {
     Task<IEnumerable<Movie>> GetByTitle(string title);
     Task<IEnumerable<Movie>> GetActiveMovies();
-    Task<IEnumerable<Movie>> GetByGenre(string genre);
+    Task<IEnumerable<Movie>> GetByGenre(Guid genreId);
 }

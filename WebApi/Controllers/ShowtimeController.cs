@@ -2,6 +2,7 @@ using System;
 using Microsoft.AspNetCore.Mvc;
 using Application.Services;
 using Domain.Entities;
+using Domain.Exceptions;
 
 namespace WebApi.Controllers;
 
@@ -41,11 +42,28 @@ public class ShowtimeController : ControllerBase
         return Ok(showtimes);
     }
 
+    // GET api/showtime/screen/{screenId}?date=2026-08-27
+    // Horarios ocupados de una sala en una fecha puntual, para que el frontend sepa
+    // qué franjas ya están tomadas al armar una función nueva.
+    [HttpGet("screen/{screenId}")]
+    public async Task<IActionResult> GetByScreen(Guid screenId, [FromQuery] DateTime date)
+    {
+        var showtimes = await _showtimeService.GetByScreenAndDate(screenId, date);
+        return Ok(showtimes);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateShowtime([FromBody] Showtime showtime)
     {
-        var created = await _showtimeService.Add(showtime);
-        return CreatedAtAction(nameof(GetShowtime), new { id = created.Id }, created);
+        try
+        {
+            var created = await _showtimeService.Add(showtime);
+            return CreatedAtAction(nameof(GetShowtime), new { id = created.Id }, created);
+        }
+        catch (ShowtimeConflictException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     [HttpPut("{id}")]
@@ -62,8 +80,15 @@ public class ShowtimeController : ControllerBase
             return NotFound();
         }
 
-        await _showtimeService.Update(showtime);
-        return NoContent();
+        try
+        {
+            await _showtimeService.Update(showtime);
+            return NoContent();
+        }
+        catch (ShowtimeConflictException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     [HttpDelete("{id}")]
