@@ -5,6 +5,8 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
+// Orquesta IShowtimeRepository + IMovieRepository (necesito la duración de la
+// película para calcular solapamientos). La llama ShowtimeController.
 public class ShowtimeService
 {
     // Minutos de limpieza que se suman a la duración de la película para calcular el
@@ -35,11 +37,13 @@ public class ShowtimeService
         return await _repo.GetByMovieId(movieId);
     }
 
+    // Reusado por ValidateNoOverlap para traer las candidatas a chocar.
     public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date)
     {
         return await _repo.GetByScreenAndDate(screenId, date);
     }
 
+    // Id lo generamos acá, no lo mandamos a confiar del cliente.
     public async Task<Showtime> Add(Showtime showtime)
     {
         showtime.Id = Guid.NewGuid();
@@ -48,12 +52,15 @@ public class ShowtimeService
         return await _repo.Add(showtime);
     }
 
+    // Re-valida solapamiento con los nuevos datos (ValidateNoOverlap excluye el propio
+    // Id, así que no choca contra sí mismo).
     public async Task Update(Showtime showtime)
     {
         await ValidateNoOverlap(showtime);
         await _repo.Update(showtime);
     }
 
+    // Soft delete: apaga IsActive en vez de borrar la fila.
     public async Task Delete(Guid id)
     {
         var showtime = await _repo.GetById(id);
@@ -80,8 +87,10 @@ public class ShowtimeService
         var newStart = showtime.StartTime;
         var newEnd = newStart.AddMinutes(movie.DurationMinutes + CLEANING_BUFFER_MINUTES);
 
+        // Traigo todas las funciones activas de esa sala en ese día y comparo en memoria.
         var candidates = await _repo.GetByScreenAndDate(showtime.ScreenId, newStart.Date);
 
+        // Cache para no pedir la misma película dos veces si hay varias candidatas.
         var movieCache = new Dictionary<Guid, Movie?> { [movie.Id] = movie };
 
         foreach (var other in candidates)
@@ -96,6 +105,8 @@ public class ShowtimeService
 
             var otherEnd = other.StartTime.AddMinutes((otherMovie?.DurationMinutes ?? 0) + CLEANING_BUFFER_MINUTES);
 
+            // Choque clásico de intervalos: se pisan si cada uno empieza antes de que
+            // termine el otro. Con < (no <=) tocarse justo en el borde no cuenta.
             var overlaps = newStart < otherEnd && other.StartTime < newEnd;
             if (overlaps)
             {
