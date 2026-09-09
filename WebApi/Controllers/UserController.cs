@@ -63,9 +63,6 @@ public class UserController : ControllerBase
         return CreatedAtAction(nameof(GetUser), new { id = created!.Id }, ToDto(created));
     }
 
-    private static UserResponseDto ToDto(User user) =>
-        new(user.Id, user.Name, user.Email, user.Role, user.IsActive);
-
     // PUT: api/user/{id}
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] User user)
@@ -98,4 +95,7 @@ public class UserController : ControllerBase
         await _userService.Delete(id);
         return NoContent();
     }
+
+    private static UserResponseDto ToDto(User user) =>
+        new(user.Id, user.Name, user.Email, user.Role, user.IsActive);
 }
