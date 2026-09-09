@@ -8,8 +8,13 @@ public class Movie
     public string Title { get; set; } = string.Empty;
     public string? Synopsis { get; set; } = string.Empty;
     public int DurationMinutes { get; set; }
-    public string Genre { get; set; } = string.Empty;
+    public Guid GenreId { get; set; }
     public string ImageUrl { get; set; } = string.Empty;
     public DateTime ReleaseDate { get; set; }
+
+    // Solo un valor de conveniencia para precargar el precio de una función nueva; el
+    // precio real de venta sigue siendo Showtime.Price, editable función por función.
+    public decimal? SuggestedPrice { get; set; }
+
     public bool IsActive { get; set; } = true;
 }

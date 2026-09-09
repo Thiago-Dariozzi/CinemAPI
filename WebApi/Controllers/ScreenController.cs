@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Application.Services;
 using Domain.Entities;
  
-namespace Controllers.ScreenController;
+namespace WebApi.Controllers;
  
 [ApiController]
 [Route("api/[controller]")]

@@ -18,12 +18,12 @@ public abstract class BaseRepository<T> : IBaseRepository<T> where T : class
         return await _context.Set<T>().ToListAsync();
     }
 
-    public async Task<T>? GetById(Guid id)
+    public async Task<T?> GetById(Guid id)
     {
         return await _context.Set<T>().FindAsync(id);
     }
 
-    public async Task<T?> Add(T entity)
+    public async Task<T> Add(T entity)
     {
         await _context.Set<T>().AddAsync(entity);
         await _context.SaveChangesAsync();
@@ -38,10 +38,14 @@ public abstract class BaseRepository<T> : IBaseRepository<T> where T : class
             _context.Set<T>().Remove(entity);
             await _context.SaveChangesAsync();
         }
-
     }
     public async Task Update(T entity)
     {
+        // Los controllers suelen hacer GetById(id) antes de llamar a Update (para
+        // validar existencia/404), lo que deja trackeada OTRA instancia con el mismo Id.
+        // Sin este Clear(), adjuntar "entity" tira "cannot be tracked because another
+        // instance with the same key value is already being tracked".
+        _context.ChangeTracker.Clear();
         _context.Set<T>().Update(entity);
         await _context.SaveChangesAsync();
     }

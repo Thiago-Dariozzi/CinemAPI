@@ -19,9 +19,9 @@ public class MovieService
         return await _repo.GetActiveMovies();
     }
 
-    public async Task<IEnumerable<Movie>> GetByGenre(string genre)
+    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
     {
-        return await _repo.GetByGenre(genre);
+        return await _repo.GetByGenre(genreId);
     }
 
     public async Task<IEnumerable<Movie>> GetByTitle(string title)
@@ -49,7 +49,12 @@ public class MovieService
 
     public async Task Delete(Guid id)
     {
-        await _repo.Delete(id);   
+        var movie = await _repo.GetById(id);
+        if (movie != null)
+        {
+            movie.IsActive = false;
+            await _repo.Update(movie);
+        }
     }
     public async Task Update(Movie movie)
     {
