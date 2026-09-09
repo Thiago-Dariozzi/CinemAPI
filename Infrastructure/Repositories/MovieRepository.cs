@@ -32,10 +32,10 @@ public class MovieRepository : BaseRepository<Movie>, IMovieRepository
         .ToListAsync();
     }
 
-    public async Task<IEnumerable<Movie>> GetByGenre(string genre)
+    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
     {
         return await _context.Movies
-        .Where(m => m.Genre.ToLower() == genre.ToLower() && m.IsActive)
+        .Where(m => m.GenreId == genreId && m.IsActive)
         .OrderByDescending(m => m.ReleaseDate)
         .ToListAsync();
     }

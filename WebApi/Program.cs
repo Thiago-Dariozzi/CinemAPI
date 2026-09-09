@@ -33,11 +33,13 @@ builder.Services.AddScoped<MovieService>();
 builder.Services.AddScoped<ScreenService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<ShowtimeService>();
+builder.Services.AddScoped<GenreService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMovieRepository, MovieRepository>();
 builder.Services.AddScoped<IScreenRepository, ScreenRepository>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<IShowtimeRepository, ShowtimeRepository>();
+builder.Services.AddScoped<IGenreRepository, GenreRepository>();
 #endregion
 
 var app = builder.Build();

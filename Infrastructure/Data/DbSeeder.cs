@@ -6,13 +6,12 @@ namespace Infrastructure.Data;
 
 public static class DbSeeder
 {
-    private static readonly string[] Genres =
+    private static readonly string[] GenreNames =
         { "Acción", "Comedia", "Drama", "Terror", "Ciencia Ficción", "Animación", "Romance", "Suspenso" };
 
     public static async Task SeedAsync(CinemAPIContext context)
     {
-        // Si ya hay películas cargadas, asumimos que Movies/Screens/Users/Tickets ya
-        // fueron sembrados en una corrida anterior.
+        // Si ya hay películas cargadas, asumimos que ya se sembró antes.
         var isFirstSeed = !await context.Movies.AnyAsync();
 
         List<Screen> screens;
@@ -20,6 +19,11 @@ public static class DbSeeder
 
         if (isFirstSeed)
         {
+            // --- Genres ---
+            var genres = GenreNames
+                .Select(name => new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true })
+                .ToList();
+
             // --- Screens ---
             var screenFaker = new Faker<Screen>("es")
                 .RuleFor(s => s.Id, f => Guid.NewGuid())
@@ -34,7 +38,7 @@ public static class DbSeeder
                 .RuleFor(m => m.Title, f => f.Commerce.ProductName())
                 .RuleFor(m => m.Synopsis, f => f.Lorem.Paragraph(3))
                 .RuleFor(m => m.DurationMinutes, f => f.Random.Int(80, 180))
-                .RuleFor(m => m.Genre, f => f.PickRandom(Genres))
+                .RuleFor(m => m.GenreId, f => f.PickRandom(genres).Id)
                 .RuleFor(m => m.ImageUrl, f => f.Image.PicsumUrl())
                 .RuleFor(m => m.ReleaseDate, f => f.Date.Past(3))
                 .RuleFor(m => m.IsActive, f => true);
@@ -50,6 +54,7 @@ public static class DbSeeder
                 .RuleFor(u => u.IsActive, f => true);
             var users = userFaker.Generate(30);
 
+            await context.Genres.AddRangeAsync(genres);
             await context.Screens.AddRangeAsync(screens);
             await context.Movies.AddRangeAsync(movies);
             await context.Users.AddRangeAsync(users);
@@ -71,16 +76,11 @@ public static class DbSeeder
         }
         else
         {
-            // Base sembrada antes de que existiera Showtime: reusamos las películas/salas
-            // que ya están para poder sembrar los horarios que faltan.
             screens = await context.Screens.ToListAsync();
             movies = await context.Movies.ToListAsync();
         }
 
-        // --- Showtimes (funciones): unos horarios de ejemplo por película, para que el
-        // panel de Usuario tenga algo para elegir al armar un ticket. Se siembran aparte
-        // (con su propio chequeo de "¿ya hay algo?") para no depender de que Movies
-        // estuviera vacía: en una base que ya tenía datos, esto la completa una sola vez.
+        // --- Showtimes (funciones) ---
         if (!await context.Showtimes.AnyAsync() && movies.Count > 0 && screens.Count > 0)
         {
             var showtimes = new List<Showtime>();
