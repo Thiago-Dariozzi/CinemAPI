@@ -6,28 +6,28 @@ namespace Application.Services;
 
 public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWork unitOfWork)
 {
-    public async Task<IEnumerable<Ticket>> GetAll()
+    public async Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct)
     {
-        return await ticketRepository.GetAll();
+        return await ticketRepository.GetAllAsync(ct);
     }
 
-    public async Task<Ticket?> GetById(Guid id)
+    public async Task<Ticket?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return await ticketRepository.GetById(id);
+        return await ticketRepository.GetByIdAsync(id, ct);
     }
 
-    public async Task<Ticket> Add(Ticket ticket)
+    public async Task<Ticket> AddAsync(Ticket ticket, CancellationToken ct)
     {
         ticket.Id = Guid.NewGuid();
         ticket.IsActive = true;
         ticketRepository.Add(ticket);
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
         return ticket;
     }
 
-    public async Task Update(Ticket ticket)
+    public async Task UpdateAsync(Ticket ticket, CancellationToken ct)
     {
-        var existing = await ticketRepository.GetById(ticket.Id);
+        var existing = await ticketRepository.GetByIdAsync(ticket.Id, ct);
         if (existing == null)
         {
             return;
@@ -39,21 +39,21 @@ public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWor
         existing.BuyDate = ticket.BuyDate;
         existing.FinalPrice = ticket.FinalPrice;
         existing.IsActive = ticket.IsActive;
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
-    public async Task Delete(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var ticket = await ticketRepository.GetById(id);
+        var ticket = await ticketRepository.GetByIdAsync(id, ct);
         if (ticket != null)
         {
             ticket.IsActive = false;
-            await unitOfWork.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync(ct);
         }
     }
 
-    public async Task<IEnumerable<Ticket>> GetByUserId(Guid userId)
+    public async Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct)
     {
-        return await ticketRepository.GetByUserId(userId);
+        return await ticketRepository.GetByUserIdAsync(userId, ct);
     }
 }

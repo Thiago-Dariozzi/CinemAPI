@@ -26,7 +26,7 @@ public sealed class GenreServiceTests
     [InlineData("Ciencia Ficción", "Ciencia Ficción")] // no toca el resto del nombre
     public async Task Add_NormalizesName_TrimAndFirstLetterUppercase(string input, string expected)
     {
-        var created = await _sut.Add(new Genre { Name = input });
+        var created = await _sut.AddAsync(new Genre { Name = input }, CancellationToken.None);
 
         Assert.Equal(expected, created.Name);
     }
@@ -40,7 +40,7 @@ public sealed class GenreServiceTests
     [InlineData("  accion ")]
     public async Task Add_WhenEquivalentNameExists_ThrowsGenreConflictException(string name)
     {
-        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Add(new Genre { Name = name }));
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.AddAsync(new Genre { Name = name }, CancellationToken.None));
     }
 
     // Documenta la semántica elegida (#19 de la auditoría): IgnoreNonSpace trata la ñ como n con
@@ -51,7 +51,7 @@ public sealed class GenreServiceTests
     {
         _genres.Seed(new Genre { Id = Guid.NewGuid(), Name = "Año" });
 
-        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Add(new Genre { Name = "Ano" }));
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.AddAsync(new Genre { Name = "Ano" }, CancellationToken.None));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class GenreServiceTests
     {
         _action.IsActive = false;
 
-        var created = await _sut.Add(new Genre { Name = "accion" });
+        var created = await _sut.AddAsync(new Genre { Name = "accion" }, CancellationToken.None);
 
         Assert.True(created.IsActive);
     }
@@ -69,7 +69,7 @@ public sealed class GenreServiceTests
     {
         var clientId = Guid.NewGuid();
 
-        var created = await _sut.Add(new Genre { Id = clientId, Name = "Terror", IsActive = false });
+        var created = await _sut.AddAsync(new Genre { Id = clientId, Name = "Terror", IsActive = false }, CancellationToken.None);
 
         Assert.NotEqual(clientId, created.Id);
         Assert.True(created.IsActive);
@@ -78,7 +78,7 @@ public sealed class GenreServiceTests
     [Fact]
     public async Task Update_KeepingItsOwnName_DoesNotConflictWithItself()
     {
-        await _sut.Update(new Genre { Id = _action.Id, Name = "acción", IsActive = true });
+        await _sut.UpdateAsync(new Genre { Id = _action.Id, Name = "acción", IsActive = true }, CancellationToken.None);
 
         Assert.Equal("Acción", Assert.Single(_genres.Stored).Name);
     }
@@ -90,7 +90,7 @@ public sealed class GenreServiceTests
         _genres.Seed(drama);
 
         await Assert.ThrowsAsync<GenreConflictException>(
-            () => _sut.Update(new Genre { Id = drama.Id, Name = "ACCION", IsActive = true }));
+            () => _sut.UpdateAsync(new Genre { Id = drama.Id, Name = "ACCION", IsActive = true }, CancellationToken.None));
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class GenreServiceTests
     {
         _movies.Seed(new Movie { Id = Guid.NewGuid(), Title = "Duro de matar", GenreId = _action.Id });
 
-        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Delete(_action.Id));
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.DeleteAsync(_action.Id, CancellationToken.None));
         Assert.True(_action.IsActive);
     }
 
@@ -107,7 +107,7 @@ public sealed class GenreServiceTests
     {
         _movies.Seed(new Movie { Id = Guid.NewGuid(), Title = "Borrada", GenreId = _action.Id, IsActive = false });
 
-        await _sut.Delete(_action.Id);
+        await _sut.DeleteAsync(_action.Id, CancellationToken.None);
 
         Assert.False(Assert.Single(_genres.Stored).IsActive);
     }

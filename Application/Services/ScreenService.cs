@@ -6,28 +6,28 @@ namespace Application.Services;
 
 public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWork unitOfWork)
 {
-    public async Task<IEnumerable<Screen>> GetAll()
+    public async Task<IReadOnlyList<Screen>> GetAllAsync(CancellationToken ct)
     {
-        return await screenRepository.GetAll();
+        return await screenRepository.GetAllAsync(ct);
     }
 
-    public async Task<Screen?> GetById(Guid id)
+    public async Task<Screen?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return await screenRepository.GetById(id);
+        return await screenRepository.GetByIdAsync(id, ct);
     }
 
-    public async Task<Screen> Add(Screen screen)
+    public async Task<Screen> AddAsync(Screen screen, CancellationToken ct)
     {
         screen.Id = Guid.NewGuid();
         screen.IsActive = true;
         screenRepository.Add(screen);
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
         return screen;
     }
 
-    public async Task Update(Screen screen)
+    public async Task UpdateAsync(Screen screen, CancellationToken ct)
     {
-        var existing = await screenRepository.GetById(screen.Id);
+        var existing = await screenRepository.GetByIdAsync(screen.Id, ct);
         if (existing == null)
         {
             return;
@@ -36,16 +36,16 @@ public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWor
         existing.Name = screen.Name;
         existing.Capacity = screen.Capacity;
         existing.IsActive = screen.IsActive;
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
-    public async Task Delete(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var screen = await screenRepository.GetById(id);
+        var screen = await screenRepository.GetByIdAsync(id, ct);
         if (screen != null)
         {
             screen.IsActive = false;
-            await unitOfWork.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync(ct);
         }
     }
 }

@@ -7,25 +7,26 @@ namespace Infrastructure.Repositories;
 
 public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository<Showtime>(context), IShowtimeRepository
 {
-    public override async Task<IEnumerable<Showtime>> GetAll() =>
+    public override async Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct) =>
         await Context.Showtimes.AsNoTracking()
             .OrderBy(s => s.StartTime)
-            .ToListAsync();
+            .ToListAsync(ct);
 
-    public async Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId) =>
+    public async Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
         await Context.Showtimes.AsNoTracking()
             .Where(s => s.MovieId == movieId)
             .OrderBy(s => s.StartTime)
-            .ToListAsync();
+            .ToListAsync(ct);
 
-    public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date) =>
+    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
         await ByScreenAndDay(screenId, date)
             .OrderBy(s => s.StartTime)
-            .ToListAsync();
+            .ToListAsync(ct);
 
     // Left join: si la película fue dada de baja, el filtro global la oculta y la función
     // vuelve con duración null (el servicio decide qué hacer en ese caso).
-    public async Task<IEnumerable<ShowtimeOccupancy>> GetOccupancyByScreenAndDate(Guid screenId, DateTime date)
+    public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAndDateAsync(
+        Guid screenId, DateTime date, CancellationToken ct)
     {
         var rows = await ByScreenAndDay(screenId, date)
             .OrderBy(s => s.StartTime)
@@ -36,7 +37,7 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
                 DurationMinutes = m == null ? (int?)null : m.DurationMinutes,
                 Title = m == null ? null : m.Title,
             })
-            .ToListAsync();
+            .ToListAsync(ct);
 
         return rows.Select(r => new ShowtimeOccupancy(r.Id, r.StartTime, r.DurationMinutes, r.Title)).ToList();
     }

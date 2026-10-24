@@ -12,67 +12,67 @@ public sealed class ShowtimeService(
     IMovieRepository movieRepository,
     IUnitOfWork unitOfWork)
 {
-    public async Task<IEnumerable<Showtime>> GetAll()
+    public async Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct)
     {
-        return await showtimeRepository.GetAll();
+        return await showtimeRepository.GetAllAsync(ct);
     }
 
-    public async Task<Showtime?> GetById(Guid id)
+    public async Task<Showtime?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return await showtimeRepository.GetById(id);
+        return await showtimeRepository.GetByIdAsync(id, ct);
     }
 
-    public async Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId)
+    public async Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct)
     {
-        return await showtimeRepository.GetByMovieId(movieId);
+        return await showtimeRepository.GetByMovieIdAsync(movieId, ct);
     }
 
     // Cartelera de una sala en un día (la usa el calendario del front).
-    public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date)
+    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
     {
-        return await showtimeRepository.GetByScreenAndDate(screenId, date);
+        return await showtimeRepository.GetByScreenAndDateAsync(screenId, date, ct);
     }
 
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
-    public async Task<Showtime> Add(Showtime showtime)
+    public async Task<Showtime> AddAsync(Showtime showtime, CancellationToken ct)
     {
         showtime.Id = Guid.NewGuid();
         showtime.IsActive = true;
-        await ValidateNoOverlap(showtime);
+        await ValidateNoOverlapAsync(showtime, ct);
 
         showtimeRepository.Add(showtime);
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
         return showtime;
     }
 
     // Valida con los datos nuevos antes de tocar la entidad trackeada (ValidateNoOverlap
     // excluye el propio Id, así que no choca contra sí misma).
-    public async Task Update(Showtime showtime)
+    public async Task UpdateAsync(Showtime showtime, CancellationToken ct)
     {
-        var existing = await showtimeRepository.GetById(showtime.Id);
+        var existing = await showtimeRepository.GetByIdAsync(showtime.Id, ct);
         if (existing == null)
         {
             return;
         }
 
-        await ValidateNoOverlap(showtime);
+        await ValidateNoOverlapAsync(showtime, ct);
 
         existing.MovieId = showtime.MovieId;
         existing.ScreenId = showtime.ScreenId;
         existing.StartTime = showtime.StartTime;
         existing.Price = showtime.Price;
         existing.IsActive = showtime.IsActive;
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
     // Soft delete: apaga IsActive en vez de borrar la fila.
-    public async Task Delete(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var showtime = await showtimeRepository.GetById(id);
+        var showtime = await showtimeRepository.GetByIdAsync(id, ct);
         if (showtime != null)
         {
             showtime.IsActive = false;
-            await unitOfWork.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync(ct);
         }
     }
 
@@ -80,16 +80,16 @@ public sealed class ShowtimeService(
     // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea
     // parcialmente (tocarse justo en el borde no cuenta como choque). Solo compara
     // funciones del mismo día calendario que StartTime.
-    private async Task ValidateNoOverlap(Showtime showtime)
+    private async Task ValidateNoOverlapAsync(Showtime showtime, CancellationToken ct)
     {
-        var movie = await movieRepository.GetById(showtime.MovieId)
+        var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct)
             ?? throw new ShowtimeConflictException($"No se encontró la película con Id {showtime.MovieId}.");
 
         var newStart = showtime.StartTime;
         var newEnd = newStart.AddMinutes(movie.DurationMinutes + Showtime.CleaningBufferMinutes);
 
         // Una sola consulta trae las funciones de esa sala en ese día con la duración de su película.
-        var occupied = await showtimeRepository.GetOccupancyByScreenAndDate(showtime.ScreenId, newStart);
+        var occupied = await showtimeRepository.GetOccupancyByScreenAndDateAsync(showtime.ScreenId, newStart, ct);
 
         foreach (var other in occupied.Where(o => o.ShowtimeId != showtime.Id))
         {

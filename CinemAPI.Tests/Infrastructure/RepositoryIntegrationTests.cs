@@ -20,7 +20,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await SaveAsync(atMidnight, lastMinute, nextDay, previousDay);
 
         await using var context = database.CreateContext();
-        var result = await new ShowtimeRepository(context).GetByScreenAndDate(screen.Id, Day.AddHours(15));
+        var result = await new ShowtimeRepository(context).GetByScreenAndDateAsync(screen.Id, Day.AddHours(15), CancellationToken.None);
 
         Assert.Equal([atMidnight.Id, lastMinute.Id], result.Select(s => s.Id));
     }
@@ -36,7 +36,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await DeactivateAsync<Movie>(deletedMovie.Id);
 
         await using var context = database.CreateContext();
-        var occupancy = (await new ShowtimeRepository(context).GetOccupancyByScreenAndDate(screen.Id, Day)).ToList();
+        var occupancy = (await new ShowtimeRepository(context).GetOccupancyByScreenAndDateAsync(screen.Id, Day, CancellationToken.None)).ToList();
 
         Assert.Equal(2, occupancy.Count);
         Assert.Equal((95, movie.Title), (occupancy[0].DurationMinutes!.Value, occupancy[0].MovieTitle));
@@ -55,8 +55,8 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await using var context = database.CreateContext();
         var repository = new ShowtimeRepository(context);
 
-        Assert.Null(await repository.GetById(inactive.Id));
-        Assert.DoesNotContain(await repository.GetAll(), s => s.Id == inactive.Id);
+        Assert.Null(await repository.GetByIdAsync(inactive.Id, CancellationToken.None));
+        Assert.DoesNotContain(await repository.GetAllAsync(CancellationToken.None), s => s.Id == inactive.Id);
     }
 
     [Fact]
@@ -66,13 +66,13 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
 
         await using (var context = database.CreateContext())
         {
-            var tracked = await new ScreenRepository(context).GetById(screen.Id);
+            var tracked = await new ScreenRepository(context).GetByIdAsync(screen.Id, CancellationToken.None);
             tracked!.Capacity = 321;
             await context.SaveChangesAsync();
         }
 
         await using var verify = database.CreateContext();
-        Assert.Equal(321, (await new ScreenRepository(verify).GetById(screen.Id))!.Capacity);
+        Assert.Equal(321, (await new ScreenRepository(verify).GetByIdAsync(screen.Id, CancellationToken.None))!.Capacity);
     }
 
     [Fact]
@@ -85,8 +85,8 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await using var context = database.CreateContext();
         var repository = new MovieRepository(context);
 
-        Assert.Equal([movie.Id], (await repository.GetByTitle(movie.Title.ToUpperInvariant())).Select(m => m.Id));
-        Assert.Equal(1, await repository.CountByGenre(genre.Id));
+        Assert.Equal([movie.Id], (await repository.GetByTitleAsync(movie.Title.ToUpperInvariant(), CancellationToken.None)).Select(m => m.Id));
+        Assert.Equal(1, await repository.CountByGenreAsync(genre.Id, CancellationToken.None));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await SaveAsync(user);
 
         await using var context = database.CreateContext();
-        var found = await new UserRepository(context).GetByEmail(user.Email.ToUpperInvariant());
+        var found = await new UserRepository(context).GetByEmailAsync(user.Email.ToUpperInvariant(), CancellationToken.None);
 
         Assert.Equal(user.Id, found?.Id);
     }

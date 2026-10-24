@@ -6,53 +6,53 @@ namespace Application.Services;
 
 public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork unitOfWork)
 {
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
+    public async Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct)
     {
-        return await movieRepository.GetActiveMovies();
+        return await movieRepository.GetActiveMoviesAsync(ct);
     }
 
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
+    public async Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct)
     {
-        return await movieRepository.GetByGenre(genreId);
+        return await movieRepository.GetByGenreAsync(genreId, ct);
     }
 
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
+    public async Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct)
     {
-        return await movieRepository.GetByTitle(title);
+        return await movieRepository.GetByTitleAsync(title, ct);
     }
 
-    public async Task<IEnumerable<Movie>> GetAll()
+    public async Task<IReadOnlyList<Movie>> GetAllAsync(CancellationToken ct)
     {
-        return await movieRepository.GetAll();
+        return await movieRepository.GetAllAsync(ct);
     }
 
-    public async Task<Movie?> GetById(Guid id)
+    public async Task<Movie?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return await movieRepository.GetById(id);
+        return await movieRepository.GetByIdAsync(id, ct);
     }
 
-    public async Task<Movie> Add(Movie movie)
+    public async Task<Movie> AddAsync(Movie movie, CancellationToken ct)
     {
         movie.Id = Guid.NewGuid();
         movie.IsActive = true;
         movieRepository.Add(movie);
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
         return movie;
     }
 
-    public async Task Delete(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var movie = await movieRepository.GetById(id);
+        var movie = await movieRepository.GetByIdAsync(id, ct);
         if (movie != null)
         {
             movie.IsActive = false;
-            await unitOfWork.SaveChangesAsync();
+            await unitOfWork.SaveChangesAsync(ct);
         }
     }
 
-    public async Task Update(Movie movie)
+    public async Task UpdateAsync(Movie movie, CancellationToken ct)
     {
-        var existing = await movieRepository.GetById(movie.Id);
+        var existing = await movieRepository.GetByIdAsync(movie.Id, ct);
         if (existing == null)
         {
             return;
@@ -66,6 +66,6 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
         existing.ReleaseDate = movie.ReleaseDate;
         existing.SuggestedPrice = movie.SuggestedPrice;
         existing.IsActive = movie.IsActive;
-        await unitOfWork.SaveChangesAsync();
+        await unitOfWork.SaveChangesAsync(ct);
     }
 }

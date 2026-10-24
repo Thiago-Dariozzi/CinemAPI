@@ -17,17 +17,17 @@ public sealed class TicketController : ControllerBase
 
     // GET: api/ticket
     [HttpGet]
-    public async Task<IActionResult> GetTickets()
+    public async Task<IActionResult> GetTickets(CancellationToken ct)
     {
-        var tickets = await _ticketService.GetAll();
+        var tickets = await _ticketService.GetAllAsync(ct);
         return Ok(tickets);
     }
 
     // GET: api/ticket/{id}
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetTicket(Guid id)
+    public async Task<IActionResult> GetTicket(Guid id, CancellationToken ct)
     {
-        var ticket = await _ticketService.GetById(id);
+        var ticket = await _ticketService.GetByIdAsync(id, ct);
         if (ticket == null)
         {
             return NotFound();
@@ -37,48 +37,48 @@ public sealed class TicketController : ControllerBase
 
     // POST: api/ticket
     [HttpPost]
-    public async Task<IActionResult> CreateTicket([FromBody] Ticket ticket)
+    public async Task<IActionResult> CreateTicket([FromBody] Ticket ticket, CancellationToken ct)
     {
-        var created = await _ticketService.Add(ticket);
+        var created = await _ticketService.AddAsync(ticket, ct);
         return CreatedAtAction(nameof(GetTicket), new { id = created.Id }, created);
     }
 
     // PUT: api/ticket/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTicket(Guid id, [FromBody] Ticket ticket)
+    public async Task<IActionResult> UpdateTicket(Guid id, [FromBody] Ticket ticket, CancellationToken ct)
     {
         if (id != ticket.Id)
         {
             return BadRequest("El id de la ruta no coincide con el id del ticket.");
         }
 
-        var existing = await _ticketService.GetById(id);
+        var existing = await _ticketService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _ticketService.Update(ticket);
+        await _ticketService.UpdateAsync(ticket, ct);
         return NoContent();
     }
 
     // DELETE: api/ticket/{id}
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteTicket(Guid id)
+    public async Task<IActionResult> DeleteTicket(Guid id, CancellationToken ct)
     {
-        var existing = await _ticketService.GetById(id);
+        var existing = await _ticketService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _ticketService.Delete(id);
+        await _ticketService.DeleteAsync(id, ct);
         return NoContent();
     }
     [HttpGet("user/{userId}")]
-    public async Task<IActionResult> GetByUser(Guid userId)
+    public async Task<IActionResult> GetByUser(Guid userId, CancellationToken ct)
     {
-        var tickets = await _ticketService.GetByUserId(userId);
+        var tickets = await _ticketService.GetByUserIdAsync(userId, ct);
         return Ok(tickets);
     }
 }

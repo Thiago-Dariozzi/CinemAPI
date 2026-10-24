@@ -9,12 +9,12 @@ public abstract class BaseRepository<T>(CinemAPIContext context) : IBaseReposito
 {
     protected CinemAPIContext Context { get; } = context;
 
-    public virtual async Task<IEnumerable<T>> GetAll() =>
-        await Context.Set<T>().AsNoTracking().ToListAsync();
+    public virtual async Task<IReadOnlyList<T>> GetAllAsync(CancellationToken ct) =>
+        await Context.Set<T>().AsNoTracking().ToListAsync(ct);
 
     // Sin FindAsync: no aplica el filtro global si la entidad ya está trackeada.
-    public virtual Task<T?> GetById(Guid id) =>
-        Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id);
+    public virtual Task<T?> GetByIdAsync(Guid id, CancellationToken ct) =>
+        Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
 
     public void Add(T entity) => Context.Set<T>().Add(entity);
 }

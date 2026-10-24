@@ -4,8 +4,8 @@ namespace Domain.Interfaces;
 
 public interface IMovieRepository : IBaseRepository<Movie>
 {
-    Task<IEnumerable<Movie>> GetByTitle(string title);
-    Task<IEnumerable<Movie>> GetActiveMovies();
-    Task<IEnumerable<Movie>> GetByGenre(Guid genreId);
-    Task<int> CountByGenre(Guid genreId);
+    Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct);
+    Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct);
+    Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct);
+    Task<int> CountByGenreAsync(Guid genreId, CancellationToken ct);
 }

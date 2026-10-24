@@ -5,10 +5,10 @@ namespace Domain.Interfaces;
 
 public interface IShowtimeRepository : IBaseRepository<Showtime>
 {
-    Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId);
+    Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct);
 
     // Funciones que empiezan ese día calendario; la hora que venga en date se ignora.
-    Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date);
+    Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct);
 
-    Task<IEnumerable<ShowtimeOccupancy>> GetOccupancyByScreenAndDate(Guid screenId, DateTime date);
+    Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct);
 }

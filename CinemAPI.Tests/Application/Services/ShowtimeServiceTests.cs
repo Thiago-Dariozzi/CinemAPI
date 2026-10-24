@@ -41,7 +41,7 @@ public sealed class ShowtimeServiceTests
     {
         var showtime = NewShowtime(Day.AddHours(hour).AddMinutes(minute));
 
-        var act = () => _sut.Add(showtime);
+        var act = () => _sut.AddAsync(showtime, CancellationToken.None);
 
         if (shouldConflict)
         {
@@ -60,7 +60,7 @@ public sealed class ShowtimeServiceTests
     {
         var showtime = NewShowtime(Day.AddHours(22).AddMinutes(minutesAfterTen));
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.Add(showtime));
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.AddAsync(showtime, CancellationToken.None));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class ShowtimeServiceTests
         var showtime = NewShowtime(Day.AddHours(20));
         showtime.ScreenId = Guid.NewGuid();
 
-        var created = await _sut.Add(showtime);
+        var created = await _sut.AddAsync(showtime, CancellationToken.None);
 
         Assert.Contains(created, _showtimes.Stored);
     }
@@ -79,7 +79,7 @@ public sealed class ShowtimeServiceTests
     {
         var showtime = NewShowtime(Day.AddDays(1).AddHours(20));
 
-        var created = await _sut.Add(showtime);
+        var created = await _sut.AddAsync(showtime, CancellationToken.None);
 
         Assert.Contains(created, _showtimes.Stored);
     }
@@ -90,7 +90,7 @@ public sealed class ShowtimeServiceTests
         _existing.IsActive = false;
         var showtime = NewShowtime(Day.AddHours(20));
 
-        var created = await _sut.Add(showtime);
+        var created = await _sut.AddAsync(showtime, CancellationToken.None);
 
         Assert.Contains(created, _showtimes.Stored);
     }
@@ -103,7 +103,7 @@ public sealed class ShowtimeServiceTests
         showtime.Id = clientId;
         showtime.IsActive = false;
 
-        var created = await _sut.Add(showtime);
+        var created = await _sut.AddAsync(showtime, CancellationToken.None);
 
         Assert.NotEqual(clientId, created.Id);
         Assert.NotEqual(Guid.Empty, created.Id);
@@ -117,7 +117,7 @@ public sealed class ShowtimeServiceTests
         var showtime = NewShowtime(Day.AddHours(10));
         showtime.MovieId = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.Add(showtime));
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.AddAsync(showtime, CancellationToken.None));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ShowtimeServiceTests
         var moved = NewShowtime(Day.AddHours(20).AddMinutes(30));
         moved.Id = _existing.Id;
 
-        await _sut.Update(moved);
+        await _sut.UpdateAsync(moved, CancellationToken.None);
 
         Assert.Equal(Day.AddHours(20).AddMinutes(30), _showtimes.Stored.Single().StartTime);
     }
@@ -140,13 +140,13 @@ public sealed class ShowtimeServiceTests
         var moved = NewShowtime(Day.AddHours(21));
         moved.Id = other.Id;
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.Update(moved));
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.UpdateAsync(moved, CancellationToken.None));
     }
 
     [Fact]
     public async Task Delete_SetsInactiveWithoutRemovingTheRow()
     {
-        await _sut.Delete(_existing.Id);
+        await _sut.DeleteAsync(_existing.Id, CancellationToken.None);
 
         Assert.False(Assert.Single(_showtimes.Stored).IsActive);
     }

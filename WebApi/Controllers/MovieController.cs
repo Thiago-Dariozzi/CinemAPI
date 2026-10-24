@@ -16,70 +16,70 @@ public sealed class MovieController : ControllerBase
     }
 
     [HttpGet("active")]
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
+    public async Task<IReadOnlyList<Movie>> GetActiveMovies(CancellationToken ct)
     {
-        return await _movieService.GetActiveMovies();
+        return await _movieService.GetActiveMoviesAsync(ct);
     }
 
     [HttpGet("genre/{genreId}")]
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
+    public async Task<IReadOnlyList<Movie>> GetByGenre(Guid genreId, CancellationToken ct)
     {
-        return await _movieService.GetByGenre(genreId);
+        return await _movieService.GetByGenreAsync(genreId, ct);
     }
 
     [HttpGet("title/{title}")]
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
+    public async Task<IReadOnlyList<Movie>> GetByTitle(string title, CancellationToken ct)
     {
-        return await _movieService.GetByTitle(title);
+        return await _movieService.GetByTitleAsync(title, ct);
     }
 
     [HttpGet]
-    public async Task<IEnumerable<Movie>> GetAll()
+    public async Task<IReadOnlyList<Movie>> GetAll(CancellationToken ct)
     {
-        return await _movieService.GetAll();
+        return await _movieService.GetAllAsync(ct);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var movie = await _movieService.GetById(id);
+        var movie = await _movieService.GetByIdAsync(id, ct);
         return movie == null ? NotFound() : Ok(movie);
     }
 
     [HttpPost]
-    public async Task<Movie?> Add([FromBody] Movie movie)
+    public async Task<Movie?> Add([FromBody] Movie movie, CancellationToken ct)
     {
-        return await _movieService.Add(movie);
+        return await _movieService.AddAsync(movie, ct);
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var existing = await _movieService.GetById(id);
+        var existing = await _movieService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _movieService.Delete(id);
+        await _movieService.DeleteAsync(id, ct);
         return NoContent();
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] Movie movie)
+    public async Task<IActionResult> Update(Guid id, [FromBody] Movie movie, CancellationToken ct)
     {
         if (id != movie.Id)
         {
             return BadRequest("El id de la ruta no coincide con el id de la película.");
         }
 
-        var existing = await _movieService.GetById(id);
+        var existing = await _movieService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _movieService.Update(movie);
+        await _movieService.UpdateAsync(movie, ct);
         return NoContent();
     }
 }

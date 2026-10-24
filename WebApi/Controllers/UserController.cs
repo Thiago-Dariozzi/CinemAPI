@@ -18,17 +18,17 @@ public sealed class UserController : ControllerBase
 
     // GET: api/user
     [HttpGet]
-    public async Task<IActionResult> GetUsers()
+    public async Task<IActionResult> GetUsers(CancellationToken ct)
     {
-        var users = await _userService.GetAll();
+        var users = await _userService.GetAllAsync(ct);
         return Ok(users.Select(ToDto));
     }
 
     // GET: api/user/{id}
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetUser(Guid id)
+    public async Task<IActionResult> GetUser(Guid id, CancellationToken ct)
     {
-        var user = await _userService.GetById(id);
+        var user = await _userService.GetByIdAsync(id, ct);
         if (user == null)
         {
             return NotFound();
@@ -38,9 +38,9 @@ public sealed class UserController : ControllerBase
 
     // GET: api/user/email/{email}
     [HttpGet("email/{email}")]
-    public async Task<IActionResult> GetByEmail(string email)
+    public async Task<IActionResult> GetByEmail(string email, CancellationToken ct)
     {
-        var user = await _userService.GetByEmail(email);
+        var user = await _userService.GetByEmailAsync(email, ct);
         if (user == null)
         {
             return NotFound();
@@ -50,15 +50,15 @@ public sealed class UserController : ControllerBase
 
     // POST: api/user
     [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] User user)
+    public async Task<IActionResult> CreateUser([FromBody] User user, CancellationToken ct)
     {
-        var existing = await _userService.GetByEmail(user.Email);
+        var existing = await _userService.GetByEmailAsync(user.Email, ct);
         if (existing != null)
         {
             return Conflict("Ya existe un usuario con ese email.");
         }
 
-        var created = await _userService.Add(user);
+        var created = await _userService.AddAsync(user, ct);
         return CreatedAtAction(nameof(GetUser), new { id = created!.Id }, ToDto(created));
     }
 
@@ -67,34 +67,34 @@ public sealed class UserController : ControllerBase
 
     // PUT: api/user/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateUser(Guid id, [FromBody] User user)
+    public async Task<IActionResult> UpdateUser(Guid id, [FromBody] User user, CancellationToken ct)
     {
         if (id != user.Id)
         {
             return BadRequest("El id de la ruta no coincide con el id del usuario.");
         }
 
-        var existing = await _userService.GetById(id);
+        var existing = await _userService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _userService.Update(user);
+        await _userService.UpdateAsync(user, ct);
         return NoContent();
     }
 
     // DELETE: api/user/{id}
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteUser(Guid id)
+    public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
     {
-        var existing = await _userService.GetById(id);
+        var existing = await _userService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await _userService.Delete(id);
+        await _userService.DeleteAsync(id, ct);
         return NoContent();
     }
 }

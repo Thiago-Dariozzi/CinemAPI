@@ -17,16 +17,16 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetGenres()
+    public async Task<IActionResult> GetGenres(CancellationToken ct)
     {
-        var genres = await _genreService.GetAll();
+        var genres = await _genreService.GetAllAsync(ct);
         return Ok(genres);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetGenre(Guid id)
+    public async Task<IActionResult> GetGenre(Guid id, CancellationToken ct)
     {
-        var genre = await _genreService.GetById(id);
+        var genre = await _genreService.GetByIdAsync(id, ct);
         if (genre == null)
         {
             return NotFound();
@@ -35,11 +35,11 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateGenre([FromBody] Genre genre)
+    public async Task<IActionResult> CreateGenre([FromBody] Genre genre, CancellationToken ct)
     {
         try
         {
-            var created = await _genreService.Add(genre);
+            var created = await _genreService.AddAsync(genre, ct);
             return CreatedAtAction(nameof(GetGenre), new { id = created.Id }, created);
         }
         catch (GenreConflictException ex)
@@ -49,14 +49,14 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateGenre(Guid id, [FromBody] Genre genre)
+    public async Task<IActionResult> UpdateGenre(Guid id, [FromBody] Genre genre, CancellationToken ct)
     {
         if (id != genre.Id)
         {
             return BadRequest("El id de la ruta no coincide con el id del género.");
         }
 
-        var existing = await _genreService.GetById(id);
+        var existing = await _genreService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
@@ -64,7 +64,7 @@ public sealed class GenreController : ControllerBase
 
         try
         {
-            await _genreService.Update(genre);
+            await _genreService.UpdateAsync(genre, ct);
             return NoContent();
         }
         catch (GenreConflictException ex)
@@ -74,9 +74,9 @@ public sealed class GenreController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteGenre(Guid id)
+    public async Task<IActionResult> DeleteGenre(Guid id, CancellationToken ct)
     {
-        var existing = await _genreService.GetById(id);
+        var existing = await _genreService.GetByIdAsync(id, ct);
         if (existing == null)
         {
             return NotFound();
@@ -84,7 +84,7 @@ public sealed class GenreController : ControllerBase
 
         try
         {
-            await _genreService.Delete(id);
+            await _genreService.DeleteAsync(id, ct);
             return NoContent();
         }
         catch (GenreConflictException ex)
