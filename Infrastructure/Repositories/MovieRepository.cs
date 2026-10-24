@@ -4,47 +4,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public sealed class MovieRepository : BaseRepository<Movie>, IMovieRepository
+public sealed class MovieRepository(CinemAPIContext context) : BaseRepository<Movie>(context), IMovieRepository
 {
-    public MovieRepository(CinemAPIContext context) : base(context)
-    {
-    }
+    public async Task<IEnumerable<Movie>> GetActiveMovies() =>
+        await Context.Movies.AsNoTracking()
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync();
 
-    public new async Task<IEnumerable<Movie>> GetAll()
-    {
-        return await _context.Movies
-        .Where(m => m.IsActive)
-        .ToListAsync();
-    }
+    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId) =>
+        await Context.Movies.AsNoTracking()
+            .Where(m => m.GenreId == genreId)
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync();
 
-    public new async Task<Movie?> GetById(Guid id)
-    {
-        return await _context.Movies
-        .FirstOrDefaultAsync(m => m.Id == id && m.IsActive);
-    }
+    public Task<int> CountByGenre(Guid genreId) =>
+        Context.Movies.CountAsync(m => m.GenreId == genreId);
 
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
-    {
-        return await _context.Movies
-        .Where(m => m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
-
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
-    {
-        return await _context.Movies
-        .Where(m => m.GenreId == genreId && m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
-
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
-    {
-        return await _context.Movies
-        .Where(m => m.Title.ToLower() == title.ToLower() && m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
-
+    // Sin ToLower(): la columna usa la collation por defecto de la base (case-insensitive),
+    // así que la comparación ya ignora mayúsculas y puede usar índices.
+    public async Task<IEnumerable<Movie>> GetByTitle(string title) =>
+        await Context.Movies.AsNoTracking()
+            .Where(m => m.Title == title)
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync();
 }

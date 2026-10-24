@@ -1,6 +1,8 @@
+using Domain.Interfaces;
+
 namespace Domain.Entities;
 
-public class Movie
+public class Movie : IEntity
 {
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;

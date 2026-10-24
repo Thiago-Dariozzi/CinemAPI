@@ -1,42 +1,51 @@
+using Application.Interfaces;
 using Domain.Entities;
 using Domain.Interfaces;
 
-
 namespace Application.Services;
 
-public sealed class ScreenService
+public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWork unitOfWork)
 {
-    private readonly IScreenRepository _repo;
-
-    public ScreenService(IScreenRepository screenRepository)
-    {
-        _repo = screenRepository;
-    }
     public async Task<IEnumerable<Screen>> GetAll()
     {
-        return await _repo.GetAll();
+        return await screenRepository.GetAll();
     }
+
     public async Task<Screen?> GetById(Guid id)
     {
-        return await _repo.GetById(id);
+        return await screenRepository.GetById(id);
     }
+
     public async Task<Screen> Add(Screen screen)
     {
         screen.Id = Guid.NewGuid();
         screen.IsActive = true;
-        return await _repo.Add(screen);
+        screenRepository.Add(screen);
+        await unitOfWork.SaveChangesAsync();
+        return screen;
     }
+
     public async Task Update(Screen screen)
     {
-        await _repo.Update(screen);
+        var existing = await screenRepository.GetById(screen.Id);
+        if (existing == null)
+        {
+            return;
+        }
+
+        existing.Name = screen.Name;
+        existing.Capacity = screen.Capacity;
+        existing.IsActive = screen.IsActive;
+        await unitOfWork.SaveChangesAsync();
     }
+
     public async Task Delete(Guid id)
     {
-        var screen = await _repo.GetById(id);
+        var screen = await screenRepository.GetById(id);
         if (screen != null)
         {
             screen.IsActive = false;
-            await _repo.Update(screen);
+            await unitOfWork.SaveChangesAsync();
         }
     }
 }

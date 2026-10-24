@@ -1,45 +1,59 @@
+using Application.Interfaces;
 using Domain.Entities;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class TicketService
+public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWork unitOfWork)
 {
-    private readonly ITicketRepository _repo;
-
-    public TicketService(ITicketRepository ticketRepository)
-    {
-        _repo = ticketRepository;
-    }
     public async Task<IEnumerable<Ticket>> GetAll()
     {
-        return await _repo.GetAll();
+        return await ticketRepository.GetAll();
     }
+
     public async Task<Ticket?> GetById(Guid id)
     {
-        return await _repo.GetById(id);
+        return await ticketRepository.GetById(id);
     }
+
     public async Task<Ticket> Add(Ticket ticket)
     {
         ticket.Id = Guid.NewGuid();
         ticket.IsActive = true;
-        return await _repo.Add(ticket);
+        ticketRepository.Add(ticket);
+        await unitOfWork.SaveChangesAsync();
+        return ticket;
     }
+
     public async Task Update(Ticket ticket)
     {
-        await _repo.Update(ticket);
+        var existing = await ticketRepository.GetById(ticket.Id);
+        if (existing == null)
+        {
+            return;
+        }
+
+        existing.MovieId = ticket.MovieId;
+        existing.ScreenId = ticket.ScreenId;
+        existing.UserId = ticket.UserId;
+        existing.BuyDate = ticket.BuyDate;
+        existing.FinalPrice = ticket.FinalPrice;
+        existing.IsActive = ticket.IsActive;
+        await unitOfWork.SaveChangesAsync();
     }
+
     public async Task Delete(Guid id)
     {
-        var ticket = await _repo.GetById(id);
+        var ticket = await ticketRepository.GetById(id);
         if (ticket != null)
         {
             ticket.IsActive = false;
-            await _repo.Update(ticket);
+            await unitOfWork.SaveChangesAsync();
         }
     }
+
     public async Task<IEnumerable<Ticket>> GetByUserId(Guid userId)
     {
-        return await _repo.GetByUserId(userId);
+        return await ticketRepository.GetByUserId(userId);
     }
 }

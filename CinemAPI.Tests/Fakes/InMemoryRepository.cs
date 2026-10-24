@@ -2,9 +2,9 @@ using Domain.Interfaces;
 
 namespace CinemAPI.Tests.Fakes;
 
-// Imita a los repositorios reales: las lecturas solo ven entidades activas (soft delete).
-public abstract class InMemoryRepository<T>(Func<T, Guid> getId, Func<T, bool> isActive) : IBaseRepository<T>
-    where T : class
+// Imita a los repositorios reales: las lecturas solo ven entidades activas (filtro global) y
+// GetById devuelve la misma instancia guardada, como una entidad trackeada por EF.
+public abstract class InMemoryRepository<T> : IBaseRepository<T> where T : class, IEntity
 {
     private readonly List<T> _items = [];
 
@@ -15,26 +15,9 @@ public abstract class InMemoryRepository<T>(Func<T, Guid> getId, Func<T, bool> i
 
     public Task<IEnumerable<T>> GetAll() => Task.FromResult<IEnumerable<T>>(Active().ToList());
 
-    public Task<T?> GetById(Guid id) => Task.FromResult(Active().FirstOrDefault(e => getId(e) == id));
+    public Task<T?> GetById(Guid id) => Task.FromResult(Active().FirstOrDefault(e => e.Id == id));
 
-    public Task<T> Add(T entity)
-    {
-        _items.Add(entity);
-        return Task.FromResult(entity);
-    }
+    public void Add(T entity) => _items.Add(entity);
 
-    public Task Update(T entity)
-    {
-        var index = _items.FindIndex(e => getId(e) == getId(entity));
-        _items[index] = entity;
-        return Task.CompletedTask;
-    }
-
-    public Task Delete(Guid id)
-    {
-        _items.RemoveAll(e => getId(e) == id);
-        return Task.CompletedTask;
-    }
-
-    protected IEnumerable<T> Active() => _items.Where(isActive);
+    protected IEnumerable<T> Active() => _items.Where(e => e.IsActive);
 }

@@ -1,62 +1,71 @@
+using Application.Interfaces;
 using Domain.Entities;
 using Domain.Interfaces;
 
-
 namespace Application.Services;
 
-public sealed class MovieService
+public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork unitOfWork)
 {
-    private readonly IMovieRepository _repo;
-    public MovieService(IMovieRepository movieRepository)
-    {
-        _repo = movieRepository;
-    }
-
     public async Task<IEnumerable<Movie>> GetActiveMovies()
     {
-        return await _repo.GetActiveMovies();
+        return await movieRepository.GetActiveMovies();
     }
 
     public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
     {
-        return await _repo.GetByGenre(genreId);
+        return await movieRepository.GetByGenre(genreId);
     }
 
     public async Task<IEnumerable<Movie>> GetByTitle(string title)
     {
-        return await _repo.GetByTitle(title);
+        return await movieRepository.GetByTitle(title);
     }
-
 
     public async Task<IEnumerable<Movie>> GetAll()
     {
-        return await _repo.GetAll();
+        return await movieRepository.GetAll();
     }
 
     public async Task<Movie?> GetById(Guid id)
     {
-        return await _repo.GetById(id);
+        return await movieRepository.GetById(id);
     }
 
-    public async Task<Movie?> Add(Movie movie)
+    public async Task<Movie> Add(Movie movie)
     {
         movie.Id = Guid.NewGuid();
         movie.IsActive = true;
-        return await _repo.Add(movie);
+        movieRepository.Add(movie);
+        await unitOfWork.SaveChangesAsync();
+        return movie;
     }
 
     public async Task Delete(Guid id)
     {
-        var movie = await _repo.GetById(id);
+        var movie = await movieRepository.GetById(id);
         if (movie != null)
         {
             movie.IsActive = false;
-            await _repo.Update(movie);
+            await unitOfWork.SaveChangesAsync();
         }
     }
+
     public async Task Update(Movie movie)
     {
-        await _repo.Update(movie);
-    }
+        var existing = await movieRepository.GetById(movie.Id);
+        if (existing == null)
+        {
+            return;
+        }
 
+        existing.Title = movie.Title;
+        existing.Synopsis = movie.Synopsis;
+        existing.DurationMinutes = movie.DurationMinutes;
+        existing.GenreId = movie.GenreId;
+        existing.ImageUrl = movie.ImageUrl;
+        existing.ReleaseDate = movie.ReleaseDate;
+        existing.SuggestedPrice = movie.SuggestedPrice;
+        existing.IsActive = movie.IsActive;
+        await unitOfWork.SaveChangesAsync();
+    }
 }

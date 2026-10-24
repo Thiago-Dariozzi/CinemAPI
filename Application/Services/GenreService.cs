@@ -1,29 +1,24 @@
 using System.Globalization;
+using Application.Interfaces;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class GenreService
+public sealed class GenreService(
+    IGenreRepository genreRepository,
+    IMovieRepository movieRepository,
+    IUnitOfWork unitOfWork)
 {
-    private readonly IGenreRepository _repo;
-    private readonly IMovieRepository _movieRepo;
-
-    public GenreService(IGenreRepository genreRepository, IMovieRepository movieRepository)
-    {
-        _repo = genreRepository;
-        _movieRepo = movieRepository;
-    }
-
     public async Task<IEnumerable<Genre>> GetAll()
     {
-        return await _repo.GetAll();
+        return await genreRepository.GetAll();
     }
 
     public async Task<Genre?> GetById(Guid id)
     {
-        return await _repo.GetById(id);
+        return await genreRepository.GetById(id);
     }
 
     public async Task<Genre> Add(Genre genre)
@@ -34,28 +29,36 @@ public sealed class GenreService
 
         await EnsureNoDuplicate(genre.Name, excludeId: null);
 
-        return await _repo.Add(genre);
+        genreRepository.Add(genre);
+        await unitOfWork.SaveChangesAsync();
+        return genre;
     }
 
     public async Task Update(Genre genre)
     {
-        genre.Name = NormalizeName(genre.Name);
+        var existing = await genreRepository.GetById(genre.Id);
+        if (existing == null)
+        {
+            return;
+        }
 
-        await EnsureNoDuplicate(genre.Name, excludeId: genre.Id);
+        var name = NormalizeName(genre.Name);
+        await EnsureNoDuplicate(name, excludeId: existing.Id);
 
-        await _repo.Update(genre);
+        existing.Name = name;
+        existing.IsActive = genre.IsActive;
+        await unitOfWork.SaveChangesAsync();
     }
 
     public async Task Delete(Guid id)
     {
-        var genre = await _repo.GetById(id);
+        var genre = await genreRepository.GetById(id);
         if (genre == null)
         {
             return;
         }
 
-        var moviesUsingGenre = await _movieRepo.GetByGenre(id);
-        var moviesCount = moviesUsingGenre.Count();
+        var moviesCount = await movieRepository.CountByGenre(id);
         if (moviesCount > 0)
         {
             throw new GenreConflictException(
@@ -64,7 +67,7 @@ public sealed class GenreService
         }
 
         genre.IsActive = false;
-        await _repo.Update(genre);
+        await unitOfWork.SaveChangesAsync();
     }
 
     // Trim + primera letra en mayúscula. No toca el resto del string (para no romper
@@ -83,9 +86,11 @@ public sealed class GenreService
     // Dos géneros son "el mismo" si su nombre coincide ignorando mayúsculas/minúsculas Y
     // tildes/acentos ("Acción" == "Accion" == "ACCIÓN"). CompareOptions.IgnoreNonSpace
     // ignora los diacríticos (evita tener que normalizar Unicode a mano con FormD).
+    // Queda en memoria a propósito: la collation de la base distingue "Año" de "Ano" y
+    // esta regla no. Los géneros son pocos y se leen sin tracking.
     private async Task EnsureNoDuplicate(string normalizedName, Guid? excludeId)
     {
-        var existing = await _repo.GetAll();
+        var existing = await genreRepository.GetAll();
         var duplicate = existing.FirstOrDefault(g =>
             (excludeId == null || g.Id != excludeId.Value) &&
             CultureInfo.InvariantCulture.CompareInfo.Compare(

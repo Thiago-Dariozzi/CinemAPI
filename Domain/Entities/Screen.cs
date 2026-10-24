@@ -1,6 +1,8 @@
+using Domain.Interfaces;
+
 namespace Domain.Entities;
 
-public class Screen
+public class Screen : IEntity
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;

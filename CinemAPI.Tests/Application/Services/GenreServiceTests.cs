@@ -9,6 +9,7 @@ public sealed class GenreServiceTests
 {
     private readonly FakeGenreRepository _genres = new();
     private readonly FakeMovieRepository _movies = new();
+    private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly GenreService _sut;
 
     private readonly Genre _action = new() { Id = Guid.NewGuid(), Name = "Acción" };
@@ -16,7 +17,7 @@ public sealed class GenreServiceTests
     public GenreServiceTests()
     {
         _genres.Seed(_action);
-        _sut = new GenreService(_genres, _movies);
+        _sut = new GenreService(_genres, _movies, _unitOfWork);
     }
 
     [Theory]

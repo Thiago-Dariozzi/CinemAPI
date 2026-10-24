@@ -1,3 +1,4 @@
+using Application.Interfaces;
 using Domain.Interfaces;
 using Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("Falta la cadena de conexión 'CinemaConnection'.");
 
         services.AddDbContext<CinemAPIContext>(options => options.UseSqlServer(connectionString));
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<CinemAPIContext>());
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IMovieRepository, MovieRepository>();

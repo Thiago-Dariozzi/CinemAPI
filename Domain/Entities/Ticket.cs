@@ -1,6 +1,8 @@
+using Domain.Interfaces;
+
 namespace Domain.Entities;
 
-public class Ticket
+public class Ticket : IEntity
 {
     public Guid Id { get; set; }
     public Guid MovieId { get; set; }

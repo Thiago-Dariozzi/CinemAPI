@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Models;
 
 namespace Domain.Interfaces;
 
@@ -6,7 +7,8 @@ public interface IShowtimeRepository : IBaseRepository<Showtime>
 {
     Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId);
 
-    // Solo compara la parte de fecha de StartTime, no la hora. La uso en
-    // ValidateNoOverlap para traer las candidatas a chocar.
+    // Funciones que empiezan ese día calendario; la hora que venga en date se ignora.
     Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date);
+
+    Task<IEnumerable<ShowtimeOccupancy>> GetOccupancyByScreenAndDate(Guid screenId, DateTime date);
 }

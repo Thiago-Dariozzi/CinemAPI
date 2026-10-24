@@ -11,8 +11,8 @@ public static class DbSeeder
 
     public static async Task SeedAsync(CinemAPIContext context)
     {
-        // Si ya hay películas cargadas, asumimos que ya se sembró antes.
-        var isFirstSeed = !await context.Movies.AnyAsync();
+        // Si ya hay películas cargadas (aunque estén dadas de baja), asumimos que ya se sembró antes.
+        var isFirstSeed = !await context.Movies.IgnoreQueryFilters().AnyAsync();
 
         List<Screen> screens;
         List<Movie> movies;
@@ -81,24 +81,55 @@ public static class DbSeeder
         }
 
         // --- Showtimes (funciones) ---
-        if (!await context.Showtimes.AnyAsync() && movies.Count > 0 && screens.Count > 0)
+        if (!await context.Showtimes.IgnoreQueryFilters().AnyAsync() && movies.Count > 0 && screens.Count > 0)
         {
-            var showtimes = new List<Showtime>();
-            foreach (var movie in movies)
-            {
-                var showtimesForMovie = new Faker<Showtime>("es")
-                    .RuleFor(s => s.Id, f => Guid.NewGuid())
-                    .RuleFor(s => s.MovieId, f => movie.Id)
-                    .RuleFor(s => s.ScreenId, f => f.PickRandom(screens).Id)
-                    .RuleFor(s => s.StartTime, f => f.Date.Soon(14).Date.AddHours(f.Random.Int(12, 22)))
-                    .RuleFor(s => s.Price, f => f.Random.Decimal(5, 25))
-                    .RuleFor(s => s.IsActive, f => true)
-                    .Generate(3);
-                showtimes.AddRange(showtimesForMovie);
-            }
-
+            var showtimes = GenerateShowtimes(movies, screens);
             await context.Showtimes.AddRangeAsync(showtimes);
             await context.SaveChangesAsync();
         }
+    }
+
+    // 3 funciones por película en salas y horarios al azar, descartando las que se superpondrían
+    // con otra ya generada en la misma sala: el seeder respeta la misma regla que ShowtimeService.
+    private static List<Showtime> GenerateShowtimes(List<Movie> movies, List<Screen> screens)
+    {
+        const int ShowtimesPerMovie = 3;
+        const int MaxAttemptsPerShowtime = 20;
+
+        var faker = new Faker("es");
+        var durations = movies.ToDictionary(m => m.Id, m => m.DurationMinutes + Showtime.CleaningBufferMinutes);
+        var showtimes = new List<Showtime>();
+
+        foreach (var movie in movies)
+        {
+            for (var i = 0; i < ShowtimesPerMovie; i++)
+            {
+                for (var attempt = 0; attempt < MaxAttemptsPerShowtime; attempt++)
+                {
+                    var candidate = new Showtime
+                    {
+                        Id = Guid.NewGuid(),
+                        MovieId = movie.Id,
+                        ScreenId = faker.PickRandom(screens).Id,
+                        StartTime = faker.Date.Soon(14).Date.AddHours(faker.Random.Int(12, 22)),
+                        Price = faker.Random.Decimal(5, 25),
+                        IsActive = true,
+                    };
+                    var candidateEnd = candidate.StartTime.AddMinutes(durations[movie.Id]);
+
+                    var overlaps = showtimes.Any(s =>
+                        s.ScreenId == candidate.ScreenId &&
+                        candidate.StartTime < s.StartTime.AddMinutes(durations[s.MovieId]) &&
+                        s.StartTime < candidateEnd);
+                    if (!overlaps)
+                    {
+                        showtimes.Add(candidate);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return showtimes;
     }
 }

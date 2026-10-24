@@ -9,8 +9,9 @@ public sealed class ShowtimeServiceTests
 {
     private static readonly DateTime Day = new(2026, 11, 1);
 
-    private readonly FakeShowtimeRepository _showtimes = new();
+    private readonly FakeShowtimeRepository _showtimes;
     private readonly FakeMovieRepository _movies = new();
+    private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly ShowtimeService _sut;
 
     private readonly Guid _screenId = Guid.NewGuid();
@@ -21,11 +22,12 @@ public sealed class ShowtimeServiceTests
 
     public ShowtimeServiceTests()
     {
+        _showtimes = new FakeShowtimeRepository(_movies);
         _movies.Seed(_movie);
         _existing = NewShowtime(Day.AddHours(20));
         _existing.Id = Guid.NewGuid();
         _showtimes.Seed(_existing);
-        _sut = new ShowtimeService(_showtimes, _movies);
+        _sut = new ShowtimeService(_showtimes, _movies, _unitOfWork);
     }
 
     [Theory]

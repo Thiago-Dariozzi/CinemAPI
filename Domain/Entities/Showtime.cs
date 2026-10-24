@@ -1,9 +1,15 @@
+using Domain.Interfaces;
+
 namespace Domain.Entities;
 
 // Una función: una película en una sala a una hora. No guarda la hora de fin, se
-// calcula con MovieId.DurationMinutes + buffer de limpieza (ver ShowtimeService).
-public class Showtime
+// calcula con la duración de la película + CleaningBufferMinutes.
+public class Showtime : IEntity
 {
+    // Minutos de limpieza que se suman a la duración de la película para calcular el
+    // tramo real que ocupa una función en la sala.
+    public const int CleaningBufferMinutes = 15;
+
     public Guid Id { get; set; }
     public Guid MovieId { get; set; }
     public Guid ScreenId { get; set; }

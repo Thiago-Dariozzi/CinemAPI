@@ -1,6 +1,8 @@
+using Domain.Interfaces;
+
 namespace Domain.Entities;
 
-public class Genre
+public class Genre : IEntity
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
