@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Application/Application.csproj" />
+  <Project Path="CinemAPI.Tests/CinemAPI.Tests.csproj" />
   <Project Path="Domain/Domain.csproj" />
   <Project Path="Infrastructure/Infrastructure.csproj" />
   <Project Path="WebApi/WebApi.csproj" />

@@ -1,0 +1,113 @@
+using Application.Services;
+using CinemAPI.Tests.Fakes;
+using Domain.Entities;
+using Domain.Exceptions;
+
+namespace CinemAPI.Tests.Application.Services;
+
+public sealed class GenreServiceTests
+{
+    private readonly FakeGenreRepository _genres = new();
+    private readonly FakeMovieRepository _movies = new();
+    private readonly GenreService _sut;
+
+    private readonly Genre _action = new() { Id = Guid.NewGuid(), Name = "Acción" };
+
+    public GenreServiceTests()
+    {
+        _genres.Seed(_action);
+        _sut = new GenreService(_genres, _movies);
+    }
+
+    [Theory]
+    [InlineData("  drama  ", "Drama")]
+    [InlineData("ciencia ficción", "Ciencia ficción")]
+    [InlineData("Ciencia Ficción", "Ciencia Ficción")] // no toca el resto del nombre
+    public async Task Add_NormalizesName_TrimAndFirstLetterUppercase(string input, string expected)
+    {
+        var created = await _sut.Add(new Genre { Name = input });
+
+        Assert.Equal(expected, created.Name);
+    }
+
+    [Theory]
+    [InlineData("Acción")]
+    [InlineData("acción")]
+    [InlineData("ACCIÓN")]
+    [InlineData("Accion")]
+    [InlineData("ACCION")]
+    [InlineData("  accion ")]
+    public async Task Add_WhenEquivalentNameExists_ThrowsGenreConflictException(string name)
+    {
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Add(new Genre { Name = name }));
+    }
+
+    // Documenta la semántica elegida (#19 de la auditoría): IgnoreNonSpace trata la ñ como n con
+    // tilde, así que "Año" y "Ano" son el mismo género. La collation de la base
+    // (Modern_Spanish_CI_AI) los consideraría distintos; por eso la comparación queda en el servicio.
+    [Fact]
+    public async Task Add_WhenNameDiffersOnlyByEnye_ThrowsGenreConflictException()
+    {
+        _genres.Seed(new Genre { Id = Guid.NewGuid(), Name = "Año" });
+
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Add(new Genre { Name = "Ano" }));
+    }
+
+    [Fact]
+    public async Task Add_WhenEquivalentGenreIsInactive_Allows()
+    {
+        _action.IsActive = false;
+
+        var created = await _sut.Add(new Genre { Name = "accion" });
+
+        Assert.True(created.IsActive);
+    }
+
+    [Fact]
+    public async Task Add_GeneratesIdAndActivates_IgnoringClientValues()
+    {
+        var clientId = Guid.NewGuid();
+
+        var created = await _sut.Add(new Genre { Id = clientId, Name = "Terror", IsActive = false });
+
+        Assert.NotEqual(clientId, created.Id);
+        Assert.True(created.IsActive);
+    }
+
+    [Fact]
+    public async Task Update_KeepingItsOwnName_DoesNotConflictWithItself()
+    {
+        await _sut.Update(new Genre { Id = _action.Id, Name = "acción", IsActive = true });
+
+        Assert.Equal("Acción", Assert.Single(_genres.Stored).Name);
+    }
+
+    [Fact]
+    public async Task Update_ToNameOfAnotherGenre_ThrowsGenreConflictException()
+    {
+        var drama = new Genre { Id = Guid.NewGuid(), Name = "Drama" };
+        _genres.Seed(drama);
+
+        await Assert.ThrowsAsync<GenreConflictException>(
+            () => _sut.Update(new Genre { Id = drama.Id, Name = "ACCION", IsActive = true }));
+    }
+
+    [Fact]
+    public async Task Delete_WhenGenreHasActiveMovies_ThrowsAndKeepsItActive()
+    {
+        _movies.Seed(new Movie { Id = Guid.NewGuid(), Title = "Duro de matar", GenreId = _action.Id });
+
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.Delete(_action.Id));
+        Assert.True(_action.IsActive);
+    }
+
+    [Fact]
+    public async Task Delete_WhenGenreOnlyHasInactiveMovies_SetsInactive()
+    {
+        _movies.Seed(new Movie { Id = Guid.NewGuid(), Title = "Borrada", GenreId = _action.Id, IsActive = false });
+
+        await _sut.Delete(_action.Id);
+
+        Assert.False(Assert.Single(_genres.Stored).IsActive);
+    }
+}
