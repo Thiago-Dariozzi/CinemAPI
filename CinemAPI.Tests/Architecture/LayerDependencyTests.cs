@@ -16,7 +16,7 @@ public sealed class LayerDependencyTests
     [Fact]
     public void Domain_DoesNotDependOnOtherLayersOrFrameworks()
     {
-        var references = ReferencesOf(typeof(Domain.Entities.Movie));
+        var references = ReferencesOf(typeof(global::Domain.Entities.Movie));
 
         Assert.DoesNotContain(references, n => n is "Application" or "Infrastructure" or "WebApi" || IsFramework(n));
     }
@@ -32,7 +32,7 @@ public sealed class LayerDependencyTests
     [Fact]
     public void Controllers_DoNotDependOnRepositoriesOrDbContext()
     {
-        var constructorParameters = typeof(WebApi.Controllers.MovieController).Assembly.GetTypes()
+        var constructorParameters = typeof(global::WebApi.Controllers.MovieController).Assembly.GetTypes()
             .Where(t => t.Name.EndsWith("Controller", StringComparison.Ordinal))
             .SelectMany(t => t.GetConstructors())
             .SelectMany(c => c.GetParameters())
