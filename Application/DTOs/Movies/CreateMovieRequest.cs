@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Application.DTOs.Movies;
 
+// Guid? + [Required]: con Guid a secas, [Required] no detecta que falte.
 public sealed record CreateMovieRequest(
     [Required(ErrorMessage = "El título es obligatorio.")]
     [StringLength(150, ErrorMessage = "El título no puede superar los 150 caracteres.")]
@@ -10,7 +11,6 @@ public sealed record CreateMovieRequest(
     string? Synopsis,
     [Range(1, 1000, ErrorMessage = "La duración debe estar entre 1 y 1000 minutos.")]
     int DurationMinutes,
-    // Guid? + [Required]: con Guid a secas, [Required] no detecta que falte.
     [Required(ErrorMessage = "El género es obligatorio.")]
     Guid? GenreId,
     string? ImageUrl,
