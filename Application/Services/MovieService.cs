@@ -1,35 +1,26 @@
 using Application.Interfaces;
 using Domain.Entities;
+using Domain.Exceptions;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork unitOfWork)
+public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork unitOfWork) : IMovieService
 {
-    public async Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct)
-    {
-        return await movieRepository.GetActiveMoviesAsync(ct);
-    }
+    private const string EntityName = "la película";
 
-    public async Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct)
-    {
-        return await movieRepository.GetByGenreAsync(genreId, ct);
-    }
+    public Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct) => movieRepository.GetActiveMoviesAsync(ct);
 
-    public async Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct)
-    {
-        return await movieRepository.GetByTitleAsync(title, ct);
-    }
+    public Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
+        movieRepository.GetByGenreAsync(genreId, ct);
 
-    public async Task<IReadOnlyList<Movie>> GetAllAsync(CancellationToken ct)
-    {
-        return await movieRepository.GetAllAsync(ct);
-    }
+    public Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
+        movieRepository.GetByTitleAsync(title, ct);
 
-    public async Task<Movie?> GetByIdAsync(Guid id, CancellationToken ct)
-    {
-        return await movieRepository.GetByIdAsync(id, ct);
-    }
+    public Task<IReadOnlyList<Movie>> GetAllAsync(CancellationToken ct) => movieRepository.GetAllAsync(ct);
+
+    public async Task<Movie> GetByIdAsync(Guid id, CancellationToken ct) =>
+        await movieRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
 
     public async Task<Movie> AddAsync(Movie movie, CancellationToken ct)
     {
@@ -40,23 +31,9 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
         return movie;
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken ct)
-    {
-        var movie = await movieRepository.GetByIdAsync(id, ct);
-        if (movie != null)
-        {
-            movie.IsActive = false;
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-    }
-
     public async Task UpdateAsync(Movie movie, CancellationToken ct)
     {
-        var existing = await movieRepository.GetByIdAsync(movie.Id, ct);
-        if (existing == null)
-        {
-            return;
-        }
+        var existing = await GetByIdAsync(movie.Id, ct);
 
         existing.Title = movie.Title;
         existing.Synopsis = movie.Synopsis;
@@ -66,6 +43,13 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
         existing.ReleaseDate = movie.ReleaseDate;
         existing.SuggestedPrice = movie.SuggestedPrice;
         existing.IsActive = movie.IsActive;
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var movie = await GetByIdAsync(id, ct);
+        movie.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }
 }

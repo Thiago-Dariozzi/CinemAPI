@@ -111,4 +111,25 @@ public sealed class GenreServiceTests
 
         Assert.False(Assert.Single(_genres.Stored).IsActive);
     }
+
+    [Fact]
+    public async Task GetById_WhenGenreDoesNotExist_ThrowsNotFoundException()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByIdAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Update_WhenGenreDoesNotExist_ThrowsNotFoundException()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => _sut.UpdateAsync(new Genre { Id = Guid.NewGuid(), Name = "Drama" }, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Delete_WhenGenreIsInactive_ThrowsNotFoundException()
+    {
+        _action.IsActive = false;
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DeleteAsync(_action.Id, CancellationToken.None));
+    }
 }

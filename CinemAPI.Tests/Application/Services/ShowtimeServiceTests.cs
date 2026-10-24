@@ -151,6 +151,23 @@ public sealed class ShowtimeServiceTests
         Assert.False(Assert.Single(_showtimes.Stored).IsActive);
     }
 
+    [Fact]
+    public async Task Update_WhenShowtimeDoesNotExist_ThrowsNotFoundException()
+    {
+        var missing = NewShowtime(Day.AddHours(10));
+        missing.Id = Guid.NewGuid();
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.UpdateAsync(missing, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Delete_WhenAlreadyDeleted_ThrowsNotFoundException()
+    {
+        _existing.IsActive = false;
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DeleteAsync(_existing.Id, CancellationToken.None));
+    }
+
     private Showtime NewShowtime(DateTime start) => new()
     {
         MovieId = _movie.Id,

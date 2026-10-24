@@ -6,6 +6,13 @@ namespace CinemAPI.Tests.Fakes;
 
 public sealed class FakeGenreRepository : InMemoryRepository<Genre>, IGenreRepository;
 
+public sealed class FakeUserRepository : InMemoryRepository<User>, IUserRepository
+{
+    // Igual que la collation de la base: sin distinguir mayúsculas.
+    public Task<User?> GetByEmailAsync(string email, CancellationToken ct) =>
+        Task.FromResult(Active().FirstOrDefault(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)));
+}
+
 public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepository
 {
     public Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>

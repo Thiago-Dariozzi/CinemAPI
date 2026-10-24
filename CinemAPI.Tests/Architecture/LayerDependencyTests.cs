@@ -43,4 +43,19 @@ public sealed class LayerDependencyTests
         Assert.DoesNotContain(constructorParameters, p =>
             p.Name.EndsWith("Repository", StringComparison.Ordinal) || typeof(DbContext).IsAssignableFrom(p));
     }
+
+    [Fact]
+    public void Controllers_DependOnServiceInterfaces_NotConcreteServices()
+    {
+        var serviceParameters = typeof(global::WebApi.Controllers.MovieController).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("Controller", StringComparison.Ordinal))
+            .SelectMany(t => t.GetConstructors())
+            .SelectMany(c => c.GetParameters())
+            .Select(p => p.ParameterType)
+            .Where(p => p.Name.EndsWith("Service", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(serviceParameters);
+        Assert.All(serviceParameters, p => Assert.True(p.IsInterface, $"{p.Name} debería ser una interfaz."));
+    }
 }

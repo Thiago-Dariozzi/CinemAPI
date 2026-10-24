@@ -1,20 +1,21 @@
 using Application.Interfaces;
 using Domain.Entities;
+using Domain.Exceptions;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWork unitOfWork)
+public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWork unitOfWork) : ITicketService
 {
-    public async Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct)
-    {
-        return await ticketRepository.GetAllAsync(ct);
-    }
+    private const string EntityName = "el ticket";
 
-    public async Task<Ticket?> GetByIdAsync(Guid id, CancellationToken ct)
-    {
-        return await ticketRepository.GetByIdAsync(id, ct);
-    }
+    public Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct) => ticketRepository.GetAllAsync(ct);
+
+    public async Task<Ticket> GetByIdAsync(Guid id, CancellationToken ct) =>
+        await ticketRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    public Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
+        ticketRepository.GetByUserIdAsync(userId, ct);
 
     public async Task<Ticket> AddAsync(Ticket ticket, CancellationToken ct)
     {
@@ -27,11 +28,7 @@ public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWor
 
     public async Task UpdateAsync(Ticket ticket, CancellationToken ct)
     {
-        var existing = await ticketRepository.GetByIdAsync(ticket.Id, ct);
-        if (existing == null)
-        {
-            return;
-        }
+        var existing = await GetByIdAsync(ticket.Id, ct);
 
         existing.MovieId = ticket.MovieId;
         existing.ScreenId = ticket.ScreenId;
@@ -44,16 +41,8 @@ public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWor
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var ticket = await ticketRepository.GetByIdAsync(id, ct);
-        if (ticket != null)
-        {
-            ticket.IsActive = false;
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-    }
-
-    public async Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct)
-    {
-        return await ticketRepository.GetByUserIdAsync(userId, ct);
+        var ticket = await GetByIdAsync(id, ct);
+        ticket.IsActive = false;
+        await unitOfWork.SaveChangesAsync(ct);
     }
 }

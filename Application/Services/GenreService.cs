@@ -9,17 +9,14 @@ namespace Application.Services;
 public sealed class GenreService(
     IGenreRepository genreRepository,
     IMovieRepository movieRepository,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork) : IGenreService
 {
-    public async Task<IReadOnlyList<Genre>> GetAllAsync(CancellationToken ct)
-    {
-        return await genreRepository.GetAllAsync(ct);
-    }
+    private const string EntityName = "el género";
 
-    public async Task<Genre?> GetByIdAsync(Guid id, CancellationToken ct)
-    {
-        return await genreRepository.GetByIdAsync(id, ct);
-    }
+    public Task<IReadOnlyList<Genre>> GetAllAsync(CancellationToken ct) => genreRepository.GetAllAsync(ct);
+
+    public async Task<Genre> GetByIdAsync(Guid id, CancellationToken ct) =>
+        await genreRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
 
     public async Task<Genre> AddAsync(Genre genre, CancellationToken ct)
     {
@@ -36,11 +33,7 @@ public sealed class GenreService(
 
     public async Task UpdateAsync(Genre genre, CancellationToken ct)
     {
-        var existing = await genreRepository.GetByIdAsync(genre.Id, ct);
-        if (existing == null)
-        {
-            return;
-        }
+        var existing = await GetByIdAsync(genre.Id, ct);
 
         var name = NormalizeName(genre.Name);
         await EnsureNoDuplicateAsync(name, excludeId: existing.Id, ct);
@@ -52,11 +45,7 @@ public sealed class GenreService(
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var genre = await genreRepository.GetByIdAsync(id, ct);
-        if (genre == null)
-        {
-            return;
-        }
+        var genre = await GetByIdAsync(id, ct);
 
         var moviesCount = await movieRepository.CountByGenreAsync(id, ct);
         if (moviesCount > 0)

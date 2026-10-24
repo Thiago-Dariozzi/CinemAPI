@@ -10,28 +10,21 @@ namespace Application.Services;
 public sealed class ShowtimeService(
     IShowtimeRepository showtimeRepository,
     IMovieRepository movieRepository,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork) : IShowtimeService
 {
-    public async Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct)
-    {
-        return await showtimeRepository.GetAllAsync(ct);
-    }
+    private const string EntityName = "la función";
 
-    public async Task<Showtime?> GetByIdAsync(Guid id, CancellationToken ct)
-    {
-        return await showtimeRepository.GetByIdAsync(id, ct);
-    }
+    public Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct) => showtimeRepository.GetAllAsync(ct);
 
-    public async Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct)
-    {
-        return await showtimeRepository.GetByMovieIdAsync(movieId, ct);
-    }
+    public async Task<Showtime> GetByIdAsync(Guid id, CancellationToken ct) =>
+        await showtimeRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    public Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
+        showtimeRepository.GetByMovieIdAsync(movieId, ct);
 
     // Cartelera de una sala en un día (la usa el calendario del front).
-    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
-    {
-        return await showtimeRepository.GetByScreenAndDateAsync(screenId, date, ct);
-    }
+    public Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
+        showtimeRepository.GetByScreenAndDateAsync(screenId, date, ct);
 
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
     public async Task<Showtime> AddAsync(Showtime showtime, CancellationToken ct)
@@ -45,15 +38,11 @@ public sealed class ShowtimeService(
         return showtime;
     }
 
-    // Valida con los datos nuevos antes de tocar la entidad trackeada (ValidateNoOverlap
+    // Valida con los datos nuevos antes de tocar la entidad trackeada (ValidateNoOverlapAsync
     // excluye el propio Id, así que no choca contra sí misma).
     public async Task UpdateAsync(Showtime showtime, CancellationToken ct)
     {
-        var existing = await showtimeRepository.GetByIdAsync(showtime.Id, ct);
-        if (existing == null)
-        {
-            return;
-        }
+        var existing = await GetByIdAsync(showtime.Id, ct);
 
         await ValidateNoOverlapAsync(showtime, ct);
 
@@ -68,12 +57,9 @@ public sealed class ShowtimeService(
     // Soft delete: apaga IsActive en vez de borrar la fila.
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var showtime = await showtimeRepository.GetByIdAsync(id, ct);
-        if (showtime != null)
-        {
-            showtime.IsActive = false;
-            await unitOfWork.SaveChangesAsync(ct);
-        }
+        var showtime = await GetByIdAsync(id, ct);
+        showtime.IsActive = false;
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
