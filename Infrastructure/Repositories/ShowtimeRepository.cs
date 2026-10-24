@@ -1,13 +1,12 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
 // Re-implemento (con "new") GetAll/GetById/Add/Update/Delete de BaseRepository
 // para filtrar por IsActive y hacer soft delete.
-public class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
+public sealed class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
 {
     public ShowtimeRepository(CinemAPIContext context) : base(context)
     {

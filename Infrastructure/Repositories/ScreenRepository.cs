@@ -1,12 +1,10 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection.Metadata;
 
 namespace Infrastructure.Repositories;
 
-public class ScreenRepository : BaseRepository<Screen>, IScreenRepository
+public sealed class ScreenRepository : BaseRepository<Screen>, IScreenRepository
 {
     public ScreenRepository(CinemAPIContext context) : base(context)
     {

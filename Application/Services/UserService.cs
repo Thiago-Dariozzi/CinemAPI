@@ -3,7 +3,7 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
-public class UserService
+public sealed class UserService
 {
     private readonly IUserRepository _repo;
     public UserService(IUserRepository repo)
@@ -12,7 +12,7 @@ public class UserService
     }
     public async Task<User?> GetByEmail(string email)
     {
-        return  await _repo.GetByEmail(email);
+        return await _repo.GetByEmail(email);
     }
     public async Task<IEnumerable<User>> GetAll()
     {
@@ -24,7 +24,7 @@ public class UserService
     {
         return await _repo.GetById(id);
     }
-    
+
     public async Task<User?> Add(User user)
     {
         user.Id = Guid.NewGuid();
@@ -37,7 +37,7 @@ public class UserService
     {
         await _repo.Update(user);
     }
-    
+
     public async Task Delete(Guid id)
     {
         var user = await _repo.GetById(id);

@@ -1,11 +1,10 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class GenreRepository : BaseRepository<Genre>, IGenreRepository
+public sealed class GenreRepository : BaseRepository<Genre>, IGenreRepository
 {
     public GenreRepository(CinemAPIContext context) : base(context)
     {

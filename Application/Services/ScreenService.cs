@@ -1,11 +1,10 @@
-using System;
 using Domain.Entities;
 using Domain.Interfaces;
 
 
 namespace Application.Services;
 
-public class ScreenService
+public sealed class ScreenService
 {
     private readonly IScreenRepository _repo;
 

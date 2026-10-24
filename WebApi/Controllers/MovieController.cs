@@ -1,22 +1,20 @@
 using Application.Services;
 using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MovieController : ControllerBase
+public sealed class MovieController : ControllerBase
 {
     private readonly MovieService _movieService;
 
     public MovieController(MovieService movieService)
     {
-        _movieService = movieService; 
+        _movieService = movieService;
     }
-    
+
     [HttpGet("active")]
     public async Task<IEnumerable<Movie>> GetActiveMovies()
     {
@@ -62,7 +60,7 @@ public class MovieController : ControllerBase
         {
             return NotFound();
         }
- 
+
         await _movieService.Delete(id);
         return NoContent();
     }

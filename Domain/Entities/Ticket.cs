@@ -1,5 +1,3 @@
-using System;
-
 namespace Domain.Entities;
 
 public class Ticket
@@ -10,5 +8,5 @@ public class Ticket
     public Guid UserId { get; set; }
     public DateTime BuyDate { get; set; }
     public decimal FinalPrice { get; set; }
-    public bool IsActive { get; set; }   
+    public bool IsActive { get; set; } = true;
 }

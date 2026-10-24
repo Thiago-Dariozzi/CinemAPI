@@ -1,17 +1,15 @@
-using System;
-using Domain.Interfaces;
 using Domain.Entities;
-using Application.Services;
+using Domain.Interfaces;
 
 
 namespace Application.Services;
 
-public class MovieService
+public sealed class MovieService
 {
     private readonly IMovieRepository _repo;
     public MovieService(IMovieRepository movieRepository)
     {
-        _repo = movieRepository; 
+        _repo = movieRepository;
     }
 
     public async Task<IEnumerable<Movie>> GetActiveMovies()

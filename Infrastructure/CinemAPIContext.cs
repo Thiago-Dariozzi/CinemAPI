@@ -1,20 +1,20 @@
-using Microsoft.EntityFrameworkCore;
 using Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure;
 
-public class CinemAPIContext : DbContext
+public sealed class CinemAPIContext : DbContext
 {
     public CinemAPIContext(DbContextOptions<CinemAPIContext> options) : base(options)
     {
     }
 
-    public DbSet<Movie> Movies { get; set; }
-    public DbSet<Screen> Screens { get; set; }
-    public DbSet<Ticket> Tickets { get; set; }
-    public DbSet<User> Users { get; set; }
-    public DbSet<Showtime> Showtimes { get; set; }
-    public DbSet<Genre> Genres { get; set; }
+    public DbSet<Movie> Movies => Set<Movie>();
+    public DbSet<Screen> Screens => Set<Screen>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Showtime> Showtimes => Set<Showtime>();
+    public DbSet<Genre> Genres => Set<Genre>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

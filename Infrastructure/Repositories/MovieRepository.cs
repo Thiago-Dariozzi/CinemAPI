@@ -1,11 +1,10 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class MovieRepository : BaseRepository<Movie>, IMovieRepository
+public sealed class MovieRepository : BaseRepository<Movie>, IMovieRepository
 {
     public MovieRepository(CinemAPIContext context) : base(context)
     {

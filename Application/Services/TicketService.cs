@@ -1,10 +1,9 @@
-using System;
 using Domain.Entities;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public class TicketService
+public sealed class TicketService
 {
     private readonly ITicketRepository _repo;
 

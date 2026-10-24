@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using Domain.Entities;
 using Domain.Exceptions;
@@ -6,7 +5,7 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
-public class GenreService
+public sealed class GenreService
 {
     private readonly IGenreRepository _repo;
     private readonly IMovieRepository _movieRepo;
@@ -50,7 +49,10 @@ public class GenreService
     public async Task Delete(Guid id)
     {
         var genre = await _repo.GetById(id);
-        if (genre == null) return;
+        if (genre == null)
+        {
+            return;
+        }
 
         var moviesUsingGenre = await _movieRepo.GetByGenre(id);
         var moviesCount = moviesUsingGenre.Count();
@@ -70,7 +72,11 @@ public class GenreService
     private static string NormalizeName(string name)
     {
         var trimmed = (name ?? string.Empty).Trim();
-        if (trimmed.Length == 0) return trimmed;
+        if (trimmed.Length == 0)
+        {
+            return trimmed;
+        }
+
         return char.ToUpperInvariant(trimmed[0]) + trimmed.Substring(1);
     }
 

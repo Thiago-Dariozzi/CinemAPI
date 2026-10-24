@@ -1,14 +1,13 @@
-using System;
-using Microsoft.AspNetCore.Mvc;
 using Application.Services;
 using Domain.Entities;
 using Domain.Exceptions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GenreController : ControllerBase
+public sealed class GenreController : ControllerBase
 {
     private readonly GenreService _genreService;
 

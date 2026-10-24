@@ -1,4 +1,3 @@
-using System;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -7,11 +6,11 @@ namespace Application.Services;
 
 // Orquesta IShowtimeRepository + IMovieRepository (necesito la duración de la
 // película para calcular solapamientos). La llama ShowtimeController.
-public class ShowtimeService
+public sealed class ShowtimeService
 {
     // Minutos de limpieza que se suman a la duración de la película para calcular el
     // tramo real que ocupa una función en la sala.
-    private const int CLEANING_BUFFER_MINUTES = 15;
+    private const int CleaningBufferMinutes = 15;
 
     private readonly IShowtimeRepository _repo;
     private readonly IMovieRepository _movieRepo;
@@ -72,7 +71,7 @@ public class ShowtimeService
     }
 
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
-    // + CLEANING_BUFFER_MINUTES]; dos tramos chocan si se cruzan aunque sea
+    // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea
     // parcialmente (tocarse justo en el borde no cuenta como choque). Solo compara
     // funciones del mismo día calendario que StartTime: no hay funciones que crucen
     // la medianoche.
@@ -85,7 +84,7 @@ public class ShowtimeService
         }
 
         var newStart = showtime.StartTime;
-        var newEnd = newStart.AddMinutes(movie.DurationMinutes + CLEANING_BUFFER_MINUTES);
+        var newEnd = newStart.AddMinutes(movie.DurationMinutes + CleaningBufferMinutes);
 
         // Traigo todas las funciones activas de esa sala en ese día y comparo en memoria.
         var candidates = await _repo.GetByScreenAndDate(showtime.ScreenId, newStart.Date);
@@ -95,7 +94,10 @@ public class ShowtimeService
 
         foreach (var other in candidates)
         {
-            if (other.Id == showtime.Id) continue; // excluye el propio registro (caso Update)
+            if (other.Id == showtime.Id)
+            {
+                continue; // excluye el propio registro (caso Update)
+            }
 
             if (!movieCache.TryGetValue(other.MovieId, out var otherMovie))
             {
@@ -103,7 +105,7 @@ public class ShowtimeService
                 movieCache[other.MovieId] = otherMovie;
             }
 
-            var otherEnd = other.StartTime.AddMinutes((otherMovie?.DurationMinutes ?? 0) + CLEANING_BUFFER_MINUTES);
+            var otherEnd = other.StartTime.AddMinutes((otherMovie?.DurationMinutes ?? 0) + CleaningBufferMinutes);
 
             // Choque clásico de intervalos: se pisan si cada uno empieza antes de que
             // termine el otro. Con < (no <=) tocarse justo en el borde no cuenta.

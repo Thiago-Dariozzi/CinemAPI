@@ -1,5 +1,3 @@
-using System;
-
 namespace Domain.Entities;
 
 // Una función: una película en una sala a una hora. No guarda la hora de fin, se

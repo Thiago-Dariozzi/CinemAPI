@@ -1,14 +1,13 @@
-using System;
-using Microsoft.AspNetCore.Mvc;
 using Application.Services;
 using Domain.Entities;
 using Domain.Exceptions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ShowtimeController : ControllerBase
+public sealed class ShowtimeController : ControllerBase
 {
     private readonly ShowtimeService _showtimeService;
 

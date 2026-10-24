@@ -1,14 +1,13 @@
-using System;
-using Microsoft.AspNetCore.Mvc;
 using Application.DTOs;
 using Application.Services;
 using Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController : ControllerBase
+public sealed class UserController : ControllerBase
 {
     private readonly UserService _userService;
 

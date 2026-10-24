@@ -1,11 +1,10 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class TicketRepository : BaseRepository<Ticket>, ITicketRepository
+public sealed class TicketRepository : BaseRepository<Ticket>, ITicketRepository
 {
     public TicketRepository(CinemAPIContext context) : base(context)
     {

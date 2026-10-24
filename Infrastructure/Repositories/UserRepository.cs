@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class UserRepository : BaseRepository<User>, IUserRepository
+public sealed class UserRepository : BaseRepository<User>, IUserRepository
 {
     public UserRepository(CinemAPIContext context) : base(context)
     {
