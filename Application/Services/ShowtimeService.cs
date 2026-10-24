@@ -1,4 +1,6 @@
+using Application.DTOs.Showtimes;
 using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -14,53 +16,62 @@ public sealed class ShowtimeService(
 {
     private const string EntityName = "la función";
 
-    public Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct) => showtimeRepository.GetAllAsync(ct);
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetAllAsync(CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetAllAsync(ct));
 
-    public async Task<Showtime> GetByIdAsync(Guid id, CancellationToken ct) =>
-        await showtimeRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+    public async Task<ShowtimeResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
 
-    public Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
-        showtimeRepository.GetByMovieIdAsync(movieId, ct);
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetByMovieIdAsync(movieId, ct));
 
     // Cartelera de una sala en un día (la usa el calendario del front).
-    public Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
-        showtimeRepository.GetByScreenAndDateAsync(screenId, date, ct);
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetByScreenAndDateAsync(
+        Guid screenId, DateOnly date, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetByScreenAndDateAsync(screenId, date.ToDateTime(TimeOnly.MinValue), ct));
 
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
-    public async Task<Showtime> AddAsync(Showtime showtime, CancellationToken ct)
+    public async Task<ShowtimeResponse> CreateAsync(CreateShowtimeRequest request, CancellationToken ct)
     {
+        var showtime = request.ToEntity();
         showtime.Id = Guid.NewGuid();
         showtime.IsActive = true;
         await ValidateNoOverlapAsync(showtime, ct);
 
         showtimeRepository.Add(showtime);
         await unitOfWork.SaveChangesAsync(ct);
-        return showtime;
+        return showtime.ToResponse();
     }
 
     // Valida con los datos nuevos antes de tocar la entidad trackeada (ValidateNoOverlapAsync
     // excluye el propio Id, así que no choca contra sí misma).
-    public async Task UpdateAsync(Showtime showtime, CancellationToken ct)
+    public async Task UpdateAsync(Guid id, UpdateShowtimeRequest request, CancellationToken ct)
     {
-        var existing = await GetByIdAsync(showtime.Id, ct);
+        var existing = await GetEntityAsync(id, ct);
+        var updated = request.ToEntity(id);
 
-        await ValidateNoOverlapAsync(showtime, ct);
+        await ValidateNoOverlapAsync(updated, ct);
 
-        existing.MovieId = showtime.MovieId;
-        existing.ScreenId = showtime.ScreenId;
-        existing.StartTime = showtime.StartTime;
-        existing.Price = showtime.Price;
-        existing.IsActive = showtime.IsActive;
+        existing.MovieId = updated.MovieId;
+        existing.ScreenId = updated.ScreenId;
+        existing.StartTime = updated.StartTime;
+        existing.Price = updated.Price;
         await unitOfWork.SaveChangesAsync(ct);
     }
 
     // Soft delete: apaga IsActive en vez de borrar la fila.
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var showtime = await GetByIdAsync(id, ct);
+        var showtime = await GetEntityAsync(id, ct);
         showtime.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }
+
+    private async Task<Showtime> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await showtimeRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    private static List<ShowtimeResponse> ToResponses(IEnumerable<Showtime> showtimes) =>
+        showtimes.Select(s => s.ToResponse()).ToList();
 
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
     // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea

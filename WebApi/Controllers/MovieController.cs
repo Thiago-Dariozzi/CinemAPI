@@ -1,5 +1,5 @@
+using Application.DTOs.Movies;
 using Application.Interfaces;
-using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
@@ -9,57 +9,56 @@ namespace WebApi.Controllers;
 public sealed class MovieController(IMovieService movieService) : ControllerBase
 {
     [HttpGet("active")]
-    public Task<IReadOnlyList<Movie>> GetActiveMovies(CancellationToken ct)
-    {
-        return movieService.GetActiveMoviesAsync(ct);
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetActiveMovies(CancellationToken ct) =>
+        Ok(await movieService.GetActiveMoviesAsync(ct));
 
-    [HttpGet("genre/{genreId}")]
-    public Task<IReadOnlyList<Movie>> GetByGenre(Guid genreId, CancellationToken ct)
-    {
-        return movieService.GetByGenreAsync(genreId, ct);
-    }
+    [HttpGet("genre/{genreId:guid}")]
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByGenre(Guid genreId, CancellationToken ct) =>
+        Ok(await movieService.GetByGenreAsync(genreId, ct));
 
     [HttpGet("title/{title}")]
-    public Task<IReadOnlyList<Movie>> GetByTitle(string title, CancellationToken ct)
-    {
-        return movieService.GetByTitleAsync(title, ct);
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByTitle(string title, CancellationToken ct) =>
+        Ok(await movieService.GetByTitleAsync(title, ct));
 
     [HttpGet]
-    public Task<IReadOnlyList<Movie>> GetAll(CancellationToken ct)
-    {
-        return movieService.GetAllAsync(ct);
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetAll(CancellationToken ct) =>
+        Ok(await movieService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
-    {
-        return Ok(await movieService.GetByIdAsync(id, ct));
-    }
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<MovieResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MovieResponse>> GetById(Guid id, CancellationToken ct) =>
+        Ok(await movieService.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public Task<Movie> Add([FromBody] Movie movie, CancellationToken ct)
+    [ProducesResponseType<MovieResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<MovieResponse>> Add(CreateMovieRequest request, CancellationToken ct)
     {
-        return movieService.AddAsync(movie, ct);
+        var created = await movieService.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         await movieService.DeleteAsync(id, ct);
         return NoContent();
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] Movie movie, CancellationToken ct)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(Guid id, UpdateMovieRequest request, CancellationToken ct)
     {
-        if (id != movie.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id de la película.");
-        }
-
-        await movieService.UpdateAsync(movie, ct);
+        await movieService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 }

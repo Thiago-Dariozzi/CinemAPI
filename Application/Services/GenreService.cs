@@ -1,5 +1,7 @@
 using System.Globalization;
+using Application.DTOs.Genres;
 using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -13,39 +15,37 @@ public sealed class GenreService(
 {
     private const string EntityName = "el género";
 
-    public Task<IReadOnlyList<Genre>> GetAllAsync(CancellationToken ct) => genreRepository.GetAllAsync(ct);
+    public async Task<IReadOnlyList<GenreResponse>> GetAllAsync(CancellationToken ct) =>
+        (await genreRepository.GetAllAsync(ct)).Select(g => g.ToResponse()).ToList();
 
-    public async Task<Genre> GetByIdAsync(Guid id, CancellationToken ct) =>
-        await genreRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+    public async Task<GenreResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
 
-    public async Task<Genre> AddAsync(Genre genre, CancellationToken ct)
+    public async Task<GenreResponse> CreateAsync(CreateGenreRequest request, CancellationToken ct)
     {
-        genre.Id = Guid.NewGuid();
-        genre.IsActive = true;
-        genre.Name = NormalizeName(genre.Name);
+        var name = NormalizeName(request.Name);
+        await EnsureNoDuplicateAsync(name, excludeId: null, ct);
 
-        await EnsureNoDuplicateAsync(genre.Name, excludeId: null, ct);
-
+        var genre = new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true };
         genreRepository.Add(genre);
         await unitOfWork.SaveChangesAsync(ct);
-        return genre;
+        return genre.ToResponse();
     }
 
-    public async Task UpdateAsync(Genre genre, CancellationToken ct)
+    public async Task UpdateAsync(Guid id, UpdateGenreRequest request, CancellationToken ct)
     {
-        var existing = await GetByIdAsync(genre.Id, ct);
+        var genre = await GetEntityAsync(id, ct);
 
-        var name = NormalizeName(genre.Name);
-        await EnsureNoDuplicateAsync(name, excludeId: existing.Id, ct);
+        var name = NormalizeName(request.Name);
+        await EnsureNoDuplicateAsync(name, excludeId: genre.Id, ct);
 
-        existing.Name = name;
-        existing.IsActive = genre.IsActive;
+        genre.Name = name;
         await unitOfWork.SaveChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var genre = await GetByIdAsync(id, ct);
+        var genre = await GetEntityAsync(id, ct);
 
         var moviesCount = await movieRepository.CountByGenreAsync(id, ct);
         if (moviesCount > 0)
@@ -58,6 +58,9 @@ public sealed class GenreService(
         genre.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }
+
+    private async Task<Genre> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await genreRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
 
     // Trim + primera letra en mayúscula. No toca el resto del string (para no romper
     // nombres ya bien escritos como "Ciencia Ficción").

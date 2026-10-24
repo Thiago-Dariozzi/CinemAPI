@@ -1,4 +1,6 @@
+using Application.DTOs.Screens;
 using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -9,34 +11,36 @@ public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWor
 {
     private const string EntityName = "la sala";
 
-    public Task<IReadOnlyList<Screen>> GetAllAsync(CancellationToken ct) => screenRepository.GetAllAsync(ct);
+    public async Task<IReadOnlyList<ScreenResponse>> GetAllAsync(CancellationToken ct) =>
+        (await screenRepository.GetAllAsync(ct)).Select(s => s.ToResponse()).ToList();
 
-    public async Task<Screen> GetByIdAsync(Guid id, CancellationToken ct) =>
-        await screenRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+    public async Task<ScreenResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
 
-    public async Task<Screen> AddAsync(Screen screen, CancellationToken ct)
+    public async Task<ScreenResponse> CreateAsync(CreateScreenRequest request, CancellationToken ct)
     {
+        var screen = request.ToEntity();
         screen.Id = Guid.NewGuid();
         screen.IsActive = true;
         screenRepository.Add(screen);
         await unitOfWork.SaveChangesAsync(ct);
-        return screen;
+        return screen.ToResponse();
     }
 
-    public async Task UpdateAsync(Screen screen, CancellationToken ct)
+    public async Task UpdateAsync(Guid id, UpdateScreenRequest request, CancellationToken ct)
     {
-        var existing = await GetByIdAsync(screen.Id, ct);
-
-        existing.Name = screen.Name;
-        existing.Capacity = screen.Capacity;
-        existing.IsActive = screen.IsActive;
+        var screen = await GetEntityAsync(id, ct);
+        request.ApplyTo(screen);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var screen = await GetByIdAsync(id, ct);
+        var screen = await GetEntityAsync(id, ct);
         screen.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }
+
+    private async Task<Screen> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await screenRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
 }

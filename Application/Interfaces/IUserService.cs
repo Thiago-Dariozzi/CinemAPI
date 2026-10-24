@@ -1,13 +1,13 @@
-using Domain.Entities;
+using Application.DTOs.Users;
 
 namespace Application.Interfaces;
 
 public interface IUserService
 {
-    Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct);
-    Task<User> GetByIdAsync(Guid id, CancellationToken ct);
-    Task<User> GetByEmailAsync(string email, CancellationToken ct);
-    Task<User> AddAsync(User user, CancellationToken ct);
-    Task UpdateAsync(User user, CancellationToken ct);
+    Task<IReadOnlyList<UserResponse>> GetAllAsync(CancellationToken ct);
+    Task<UserResponse> GetByIdAsync(Guid id, CancellationToken ct);
+    Task<UserResponse> GetByEmailAsync(string email, CancellationToken ct);
+    Task<UserResponse> CreateAsync(CreateUserRequest request, CancellationToken ct);
+    Task UpdateAsync(Guid id, UpdateUserRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
 }

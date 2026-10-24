@@ -1,12 +1,12 @@
-using Domain.Entities;
+using Application.DTOs.Screens;
 
 namespace Application.Interfaces;
 
 public interface IScreenService
 {
-    Task<IReadOnlyList<Screen>> GetAllAsync(CancellationToken ct);
-    Task<Screen> GetByIdAsync(Guid id, CancellationToken ct);
-    Task<Screen> AddAsync(Screen screen, CancellationToken ct);
-    Task UpdateAsync(Screen screen, CancellationToken ct);
+    Task<IReadOnlyList<ScreenResponse>> GetAllAsync(CancellationToken ct);
+    Task<ScreenResponse> GetByIdAsync(Guid id, CancellationToken ct);
+    Task<ScreenResponse> CreateAsync(CreateScreenRequest request, CancellationToken ct);
+    Task UpdateAsync(Guid id, UpdateScreenRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
 }

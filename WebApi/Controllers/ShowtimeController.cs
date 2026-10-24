@@ -1,6 +1,7 @@
+using Application.DTOs.Showtimes;
 using Application.Interfaces;
-using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace WebApi.Controllers;
 
@@ -9,56 +10,58 @@ namespace WebApi.Controllers;
 public sealed class ShowtimeController(IShowtimeService showtimeService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetShowtimes(CancellationToken ct)
-    {
-        return Ok(await showtimeService.GetAllAsync(ct));
-    }
+    [ProducesResponseType<IReadOnlyList<ShowtimeResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ShowtimeResponse>>> GetShowtimes(CancellationToken ct) =>
+        Ok(await showtimeService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetShowtime(Guid id, CancellationToken ct)
-    {
-        return Ok(await showtimeService.GetByIdAsync(id, ct));
-    }
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<ShowtimeResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ShowtimeResponse>> GetShowtime(Guid id, CancellationToken ct) =>
+        Ok(await showtimeService.GetByIdAsync(id, ct));
 
     // Todas las funciones de una película, sin importar sala ni fecha.
-    [HttpGet("movie/{movieId}")]
-    public async Task<IActionResult> GetByMovie(Guid movieId, CancellationToken ct)
-    {
-        return Ok(await showtimeService.GetByMovieIdAsync(movieId, ct));
-    }
+    [HttpGet("movie/{movieId:guid}")]
+    [ProducesResponseType<IReadOnlyList<ShowtimeResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ShowtimeResponse>>> GetByMovie(Guid movieId, CancellationToken ct) =>
+        Ok(await showtimeService.GetByMovieIdAsync(movieId, ct));
 
     // GET api/showtime/screen/{screenId}?date=2026-08-27
     // La cartelera de una sala en un día puntual (para armar el calendario en el front).
-    [HttpGet("screen/{screenId}")]
-    // Si no mandan ?date, el model binding no tira error: date queda en default(DateTime) (01/01/0001).
-    public async Task<IActionResult> GetByScreen(Guid screenId, [FromQuery] DateTime date, CancellationToken ct)
-    {
-        return Ok(await showtimeService.GetByScreenAndDateAsync(screenId, date, ct));
-    }
+    // BindRequired: sin ?date responde 400 en vez de buscar el 01/01/0001.
+    [HttpGet("screen/{screenId:guid}")]
+    [ProducesResponseType<IReadOnlyList<ShowtimeResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<ShowtimeResponse>>> GetByScreen(
+        Guid screenId, [FromQuery, BindRequired] DateOnly date, CancellationToken ct) =>
+        Ok(await showtimeService.GetByScreenAndDateAsync(screenId, date, ct));
 
     // El service valida solapamiento antes de guardar; si choca, el handler global responde 409.
     [HttpPost]
-    public async Task<IActionResult> CreateShowtime([FromBody] Showtime showtime, CancellationToken ct)
+    [ProducesResponseType<ShowtimeResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ShowtimeResponse>> CreateShowtime(CreateShowtimeRequest request, CancellationToken ct)
     {
-        var created = await showtimeService.AddAsync(showtime, ct);
+        var created = await showtimeService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetShowtime), new { id = created.Id }, created);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateShowtime(Guid id, [FromBody] Showtime showtime, CancellationToken ct)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateShowtime(Guid id, UpdateShowtimeRequest request, CancellationToken ct)
     {
-        // El id de la URL manda; si el body trae otro, es un request mal armado.
-        if (id != showtime.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del horario.");
-        }
-
-        await showtimeService.UpdateAsync(showtime, ct);
+        await showtimeService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 
     // Delete es soft, el service apaga IsActive en vez de borrar la fila.
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteShowtime(Guid id, CancellationToken ct)
     {
         await showtimeService.DeleteAsync(id, ct);

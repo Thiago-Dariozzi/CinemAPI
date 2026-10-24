@@ -1,3 +1,4 @@
+using Application.DTOs.Users;
 using Application.Services;
 using CinemAPI.Tests.Fakes;
 using Domain.Entities;
@@ -7,11 +8,13 @@ namespace CinemAPI.Tests.Application.Services;
 
 public sealed class UserServiceTests
 {
+    private static readonly CancellationToken Ct = CancellationToken.None;
+
     private readonly FakeUserRepository _users = new();
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly UserService _sut;
 
-    private readonly User _ana = new() { Id = Guid.NewGuid(), Name = "Ana", Email = "ana@cine.com", Password = "x" };
+    private readonly User _ana = new() { Id = Guid.NewGuid(), Name = "Ana", Email = "ana@cine.com", Password = "secreta", Role = "Client" };
 
     public UserServiceTests()
     {
@@ -20,30 +23,40 @@ public sealed class UserServiceTests
     }
 
     [Fact]
-    public async Task Add_WhenEmailAlreadyExists_ThrowsUserConflictException()
+    public async Task Create_WhenEmailAlreadyExists_ThrowsUserConflictException()
     {
-        var duplicate = new User { Name = "Otra Ana", Email = "ANA@cine.com", Password = "y" };
+        var ex = await Assert.ThrowsAsync<UserConflictException>(
+            () => _sut.CreateAsync(new CreateUserRequest("Otra Ana", "ANA@cine.com", "y", null), Ct));
 
-        var ex = await Assert.ThrowsAsync<UserConflictException>(() => _sut.AddAsync(duplicate, CancellationToken.None));
         Assert.Equal("Ya existe un usuario con ese email.", ex.Message);
         Assert.Equal(0, _unitOfWork.SaveCount);
     }
 
     [Fact]
-    public async Task Add_GeneratesIdActivatesAndSaves()
+    public async Task Create_GeneratesIdActivatesAndDefaultsRoleToClient()
     {
-        var created = await _sut.AddAsync(
-            new User { Id = Guid.Empty, Name = "Beto", Email = "beto@cine.com", Password = "z", IsActive = false },
-            CancellationToken.None);
+        var created = await _sut.CreateAsync(new CreateUserRequest("Beto", "beto@cine.com", "z", null), Ct);
 
         Assert.NotEqual(Guid.Empty, created.Id);
         Assert.True(created.IsActive);
+        Assert.Equal("Client", created.Role);
         Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    // Antes el PUT recibía la entidad entera y pisaba la contraseña (#1 y #6 de la auditoría).
+    [Fact]
+    public async Task Update_ChangesProfileButKeepsPasswordAndActiveState()
+    {
+        await _sut.UpdateAsync(_ana.Id, new UpdateUserRequest("Ana María", "anam@cine.com", "Admin"), Ct);
+
+        Assert.Equal(("Ana María", "anam@cine.com", "Admin"), (_ana.Name, _ana.Email, _ana.Role));
+        Assert.Equal("secreta", _ana.Password);
+        Assert.True(_ana.IsActive);
     }
 
     [Fact]
     public async Task GetByEmail_WhenNotFound_ThrowsNotFoundException()
     {
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByEmailAsync("nadie@cine.com", CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByEmailAsync("nadie@cine.com", Ct));
     }
 }

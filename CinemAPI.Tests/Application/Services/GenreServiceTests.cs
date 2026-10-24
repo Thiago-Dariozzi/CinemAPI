@@ -1,3 +1,4 @@
+using Application.DTOs.Genres;
 using Application.Services;
 using CinemAPI.Tests.Fakes;
 using Domain.Entities;
@@ -24,9 +25,9 @@ public sealed class GenreServiceTests
     [InlineData("  drama  ", "Drama")]
     [InlineData("ciencia ficción", "Ciencia ficción")]
     [InlineData("Ciencia Ficción", "Ciencia Ficción")] // no toca el resto del nombre
-    public async Task Add_NormalizesName_TrimAndFirstLetterUppercase(string input, string expected)
+    public async Task Create_NormalizesName_TrimAndFirstLetterUppercase(string input, string expected)
     {
-        var created = await _sut.AddAsync(new Genre { Name = input }, CancellationToken.None);
+        var created = await _sut.CreateAsync(new CreateGenreRequest(input), CancellationToken.None);
 
         Assert.Equal(expected, created.Name);
     }
@@ -38,47 +39,45 @@ public sealed class GenreServiceTests
     [InlineData("Accion")]
     [InlineData("ACCION")]
     [InlineData("  accion ")]
-    public async Task Add_WhenEquivalentNameExists_ThrowsGenreConflictException(string name)
+    public async Task Create_WhenEquivalentNameExists_ThrowsGenreConflictException(string name)
     {
-        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.AddAsync(new Genre { Name = name }, CancellationToken.None));
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.CreateAsync(new CreateGenreRequest(name), CancellationToken.None));
     }
 
     // Documenta la semántica elegida (#19 de la auditoría): IgnoreNonSpace trata la ñ como n con
     // tilde, así que "Año" y "Ano" son el mismo género. La collation de la base
     // (Modern_Spanish_CI_AI) los consideraría distintos; por eso la comparación queda en el servicio.
     [Fact]
-    public async Task Add_WhenNameDiffersOnlyByEnye_ThrowsGenreConflictException()
+    public async Task Create_WhenNameDiffersOnlyByEnye_ThrowsGenreConflictException()
     {
         _genres.Seed(new Genre { Id = Guid.NewGuid(), Name = "Año" });
 
-        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.AddAsync(new Genre { Name = "Ano" }, CancellationToken.None));
+        await Assert.ThrowsAsync<GenreConflictException>(() => _sut.CreateAsync(new CreateGenreRequest("Ano"), CancellationToken.None));
     }
 
     [Fact]
-    public async Task Add_WhenEquivalentGenreIsInactive_Allows()
+    public async Task Create_WhenEquivalentGenreIsInactive_Allows()
     {
         _action.IsActive = false;
 
-        var created = await _sut.AddAsync(new Genre { Name = "accion" }, CancellationToken.None);
+        var created = await _sut.CreateAsync(new CreateGenreRequest("accion"), CancellationToken.None);
 
         Assert.True(created.IsActive);
     }
 
     [Fact]
-    public async Task Add_GeneratesIdAndActivates_IgnoringClientValues()
+    public async Task Create_GeneratesIdAndActivates()
     {
-        var clientId = Guid.NewGuid();
+        var created = await _sut.CreateAsync(new CreateGenreRequest("Terror"), CancellationToken.None);
 
-        var created = await _sut.AddAsync(new Genre { Id = clientId, Name = "Terror", IsActive = false }, CancellationToken.None);
-
-        Assert.NotEqual(clientId, created.Id);
+        Assert.NotEqual(Guid.Empty, created.Id);
         Assert.True(created.IsActive);
     }
 
     [Fact]
     public async Task Update_KeepingItsOwnName_DoesNotConflictWithItself()
     {
-        await _sut.UpdateAsync(new Genre { Id = _action.Id, Name = "acción", IsActive = true }, CancellationToken.None);
+        await _sut.UpdateAsync(_action.Id, new UpdateGenreRequest("acción"), CancellationToken.None);
 
         Assert.Equal("Acción", Assert.Single(_genres.Stored).Name);
     }
@@ -90,7 +89,7 @@ public sealed class GenreServiceTests
         _genres.Seed(drama);
 
         await Assert.ThrowsAsync<GenreConflictException>(
-            () => _sut.UpdateAsync(new Genre { Id = drama.Id, Name = "ACCION", IsActive = true }, CancellationToken.None));
+            () => _sut.UpdateAsync(drama.Id, new UpdateGenreRequest("ACCION"), CancellationToken.None));
     }
 
     [Fact]
@@ -122,7 +121,7 @@ public sealed class GenreServiceTests
     public async Task Update_WhenGenreDoesNotExist_ThrowsNotFoundException()
     {
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _sut.UpdateAsync(new Genre { Id = Guid.NewGuid(), Name = "Drama" }, CancellationToken.None));
+            () => _sut.UpdateAsync(Guid.NewGuid(), new UpdateGenreRequest("Drama"), CancellationToken.None));
     }
 
     [Fact]

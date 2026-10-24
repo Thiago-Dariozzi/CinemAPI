@@ -45,11 +45,13 @@ WebApi/
 
 ```csharp
 // Application/DTOs/Showtimes/CreateShowtimeRequest.cs
+// Atributos en el parámetro, NO con "property:": MVC tira InvalidOperationException (500) si un
+// record posicional tiene validaciones en la propiedad. Lo verifica ContractTests.
 public sealed record CreateShowtimeRequest(
-    [property: Required] Guid? MovieId,        // Guid? + [Required]: con Guid a secas, [Required] no detecta el valor vacío
-    [property: Required] Guid? ScreenId,
-    [property: Required] DateTime? StartTime,
-    [property: Range(0, 1_000_000)] decimal Price);
+    [Required(ErrorMessage = "La película es obligatoria.")] Guid? MovieId,   // Guid? + [Required]: con Guid a secas, [Required] no detecta el valor vacío
+    [Required] Guid? ScreenId,
+    [Required] DateTime? StartTime,
+    [Range(0, 1_000_000)] decimal Price);
 
 // Application/DTOs/Showtimes/ShowtimeResponse.cs
 public sealed record ShowtimeResponse(Guid Id, Guid MovieId, Guid ScreenId, DateTime StartTime, decimal Price);

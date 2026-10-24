@@ -1,15 +1,15 @@
-using Domain.Entities;
+using Application.DTOs.Movies;
 
 namespace Application.Interfaces;
 
 public interface IMovieService
 {
-    Task<IReadOnlyList<Movie>> GetAllAsync(CancellationToken ct);
-    Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct);
-    Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct);
-    Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct);
-    Task<Movie> GetByIdAsync(Guid id, CancellationToken ct);
-    Task<Movie> AddAsync(Movie movie, CancellationToken ct);
-    Task UpdateAsync(Movie movie, CancellationToken ct);
+    Task<IReadOnlyList<MovieResponse>> GetAllAsync(CancellationToken ct);
+    Task<IReadOnlyList<MovieResponse>> GetActiveMoviesAsync(CancellationToken ct);
+    Task<IReadOnlyList<MovieResponse>> GetByGenreAsync(Guid genreId, CancellationToken ct);
+    Task<IReadOnlyList<MovieResponse>> GetByTitleAsync(string title, CancellationToken ct);
+    Task<MovieResponse> GetByIdAsync(Guid id, CancellationToken ct);
+    Task<MovieResponse> CreateAsync(CreateMovieRequest request, CancellationToken ct);
+    Task UpdateAsync(Guid id, UpdateMovieRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
 }

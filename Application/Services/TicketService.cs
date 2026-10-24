@@ -1,4 +1,6 @@
+using Application.DTOs.Tickets;
 using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -9,40 +11,42 @@ public sealed class TicketService(ITicketRepository ticketRepository, IUnitOfWor
 {
     private const string EntityName = "el ticket";
 
-    public Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct) => ticketRepository.GetAllAsync(ct);
+    public async Task<IReadOnlyList<TicketResponse>> GetAllAsync(CancellationToken ct) =>
+        ToResponses(await ticketRepository.GetAllAsync(ct));
 
-    public async Task<Ticket> GetByIdAsync(Guid id, CancellationToken ct) =>
-        await ticketRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+    public async Task<TicketResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
 
-    public Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
-        ticketRepository.GetByUserIdAsync(userId, ct);
+    public async Task<IReadOnlyList<TicketResponse>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
+        ToResponses(await ticketRepository.GetByUserIdAsync(userId, ct));
 
-    public async Task<Ticket> AddAsync(Ticket ticket, CancellationToken ct)
+    public async Task<TicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken ct)
     {
+        var ticket = request.ToEntity();
         ticket.Id = Guid.NewGuid();
         ticket.IsActive = true;
         ticketRepository.Add(ticket);
         await unitOfWork.SaveChangesAsync(ct);
-        return ticket;
+        return ticket.ToResponse();
     }
 
-    public async Task UpdateAsync(Ticket ticket, CancellationToken ct)
+    public async Task UpdateAsync(Guid id, UpdateTicketRequest request, CancellationToken ct)
     {
-        var existing = await GetByIdAsync(ticket.Id, ct);
-
-        existing.MovieId = ticket.MovieId;
-        existing.ScreenId = ticket.ScreenId;
-        existing.UserId = ticket.UserId;
-        existing.BuyDate = ticket.BuyDate;
-        existing.FinalPrice = ticket.FinalPrice;
-        existing.IsActive = ticket.IsActive;
+        var ticket = await GetEntityAsync(id, ct);
+        request.ApplyTo(ticket);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var ticket = await GetByIdAsync(id, ct);
+        var ticket = await GetEntityAsync(id, ct);
         ticket.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }
+
+    private async Task<Ticket> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await ticketRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    private static List<TicketResponse> ToResponses(IEnumerable<Ticket> tickets) =>
+        tickets.Select(t => t.ToResponse()).ToList();
 }

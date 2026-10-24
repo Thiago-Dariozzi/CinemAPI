@@ -1,6 +1,5 @@
-using Application.DTOs;
+using Application.DTOs.Users;
 using Application.Interfaces;
-using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
@@ -10,50 +9,48 @@ namespace WebApi.Controllers;
 public sealed class UserController(IUserService userService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetUsers(CancellationToken ct)
-    {
-        var users = await userService.GetAllAsync(ct);
-        return Ok(users.Select(ToDto));
-    }
+    [ProducesResponseType<IReadOnlyList<UserResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<UserResponse>>> GetUsers(CancellationToken ct) =>
+        Ok(await userService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetUser(Guid id, CancellationToken ct)
-    {
-        return Ok(ToDto(await userService.GetByIdAsync(id, ct)));
-    }
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserResponse>> GetUser(Guid id, CancellationToken ct) =>
+        Ok(await userService.GetByIdAsync(id, ct));
 
     [HttpGet("email/{email}")]
-    public async Task<IActionResult> GetByEmail(string email, CancellationToken ct)
-    {
-        return Ok(ToDto(await userService.GetByEmailAsync(email, ct)));
-    }
+    [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserResponse>> GetByEmail(string email, CancellationToken ct) =>
+        Ok(await userService.GetByEmailAsync(email, ct));
 
     [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] User user, CancellationToken ct)
+    [ProducesResponseType<UserResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<UserResponse>> CreateUser(CreateUserRequest request, CancellationToken ct)
     {
-        var created = await userService.AddAsync(user, ct);
-        return CreatedAtAction(nameof(GetUser), new { id = created.Id }, ToDto(created));
+        var created = await userService.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetUser), new { id = created.Id }, created);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateUser(Guid id, [FromBody] User user, CancellationToken ct)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateUser(Guid id, UpdateUserRequest request, CancellationToken ct)
     {
-        if (id != user.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del usuario.");
-        }
-
-        await userService.UpdateAsync(user, ct);
+        await userService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
     {
         await userService.DeleteAsync(id, ct);
         return NoContent();
     }
-
-    private static UserResponseDto ToDto(User user) =>
-        new(user.Id, user.Name, user.Email, user.Role, user.IsActive);
 }

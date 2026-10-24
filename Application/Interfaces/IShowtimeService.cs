@@ -1,14 +1,14 @@
-using Domain.Entities;
+using Application.DTOs.Showtimes;
 
 namespace Application.Interfaces;
 
 public interface IShowtimeService
 {
-    Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct);
-    Task<Showtime> GetByIdAsync(Guid id, CancellationToken ct);
-    Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct);
-    Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct);
-    Task<Showtime> AddAsync(Showtime showtime, CancellationToken ct);
-    Task UpdateAsync(Showtime showtime, CancellationToken ct);
+    Task<IReadOnlyList<ShowtimeResponse>> GetAllAsync(CancellationToken ct);
+    Task<ShowtimeResponse> GetByIdAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<ShowtimeResponse>> GetByMovieIdAsync(Guid movieId, CancellationToken ct);
+    Task<IReadOnlyList<ShowtimeResponse>> GetByScreenAndDateAsync(Guid screenId, DateOnly date, CancellationToken ct);
+    Task<ShowtimeResponse> CreateAsync(CreateShowtimeRequest request, CancellationToken ct);
+    Task UpdateAsync(Guid id, UpdateShowtimeRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
 }

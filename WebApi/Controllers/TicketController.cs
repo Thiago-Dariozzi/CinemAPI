@@ -1,5 +1,5 @@
+using Application.DTOs.Tickets;
 using Application.Interfaces;
-using Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
@@ -9,46 +9,46 @@ namespace WebApi.Controllers;
 public sealed class TicketController(ITicketService ticketService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetTickets(CancellationToken ct)
-    {
-        return Ok(await ticketService.GetAllAsync(ct));
-    }
+    [ProducesResponseType<IReadOnlyList<TicketResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<TicketResponse>>> GetTickets(CancellationToken ct) =>
+        Ok(await ticketService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetTicket(Guid id, CancellationToken ct)
-    {
-        return Ok(await ticketService.GetByIdAsync(id, ct));
-    }
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<TicketResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TicketResponse>> GetTicket(Guid id, CancellationToken ct) =>
+        Ok(await ticketService.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public async Task<IActionResult> CreateTicket([FromBody] Ticket ticket, CancellationToken ct)
+    [ProducesResponseType<TicketResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<TicketResponse>> CreateTicket(CreateTicketRequest request, CancellationToken ct)
     {
-        var created = await ticketService.AddAsync(ticket, ct);
+        var created = await ticketService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetTicket), new { id = created.Id }, created);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTicket(Guid id, [FromBody] Ticket ticket, CancellationToken ct)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateTicket(Guid id, UpdateTicketRequest request, CancellationToken ct)
     {
-        if (id != ticket.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del ticket.");
-        }
-
-        await ticketService.UpdateAsync(ticket, ct);
+        await ticketService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTicket(Guid id, CancellationToken ct)
     {
         await ticketService.DeleteAsync(id, ct);
         return NoContent();
     }
 
-    [HttpGet("user/{userId}")]
-    public async Task<IActionResult> GetByUser(Guid userId, CancellationToken ct)
-    {
-        return Ok(await ticketService.GetByUserIdAsync(userId, ct));
-    }
+    [HttpGet("user/{userId:guid}")]
+    [ProducesResponseType<IReadOnlyList<TicketResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<TicketResponse>>> GetByUser(Guid userId, CancellationToken ct) =>
+        Ok(await ticketService.GetByUserIdAsync(userId, ct));
 }

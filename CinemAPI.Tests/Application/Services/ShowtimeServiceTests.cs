@@ -1,3 +1,4 @@
+using Application.DTOs.Showtimes;
 using Application.Services;
 using CinemAPI.Tests.Fakes;
 using Domain.Entities;
@@ -8,6 +9,7 @@ namespace CinemAPI.Tests.Application.Services;
 public sealed class ShowtimeServiceTests
 {
     private static readonly DateTime Day = new(2026, 11, 1);
+    private static readonly CancellationToken Ct = CancellationToken.None;
 
     private readonly FakeShowtimeRepository _showtimes;
     private readonly FakeMovieRepository _movies = new();
@@ -24,9 +26,7 @@ public sealed class ShowtimeServiceTests
     {
         _showtimes = new FakeShowtimeRepository(_movies);
         _movies.Seed(_movie);
-        _existing = NewShowtime(Day.AddHours(20));
-        _existing.Id = Guid.NewGuid();
-        _showtimes.Seed(_existing);
+        _existing = SeedShowtime(Day.AddHours(20));
         _sut = new ShowtimeService(_showtimes, _movies, _unitOfWork);
     }
 
@@ -37,11 +37,11 @@ public sealed class ShowtimeServiceTests
     [InlineData(17, 46, true)]  // termina 20:01
     [InlineData(17, 45, false)] // termina justo 20:00: tocarse en el borde no choca
     [InlineData(22, 15, false)] // empieza justo cuando la otra libera la sala
-    public async Task Add_DetectsOverlapOnSameScreenAndDay(int hour, int minute, bool shouldConflict)
+    public async Task Create_DetectsOverlapOnSameScreenAndDay(int hour, int minute, bool shouldConflict)
     {
-        var showtime = NewShowtime(Day.AddHours(hour).AddMinutes(minute));
+        var request = NewRequest(Day.AddHours(hour).AddMinutes(minute));
 
-        var act = () => _sut.AddAsync(showtime, CancellationToken.None);
+        var act = () => _sut.CreateAsync(request, Ct);
 
         if (shouldConflict)
         {
@@ -56,108 +56,92 @@ public sealed class ShowtimeServiceTests
     [Theory]
     [InlineData(0)]  // 22:00: la película terminó, pero la sala está en limpieza
     [InlineData(14)] // 22:14: último minuto del buffer
-    public async Task Add_WhenStartsDuringCleaningBuffer_ThrowsShowtimeConflictException(int minutesAfterTen)
+    public async Task Create_WhenStartsDuringCleaningBuffer_ThrowsShowtimeConflictException(int minutesAfterTen)
     {
-        var showtime = NewShowtime(Day.AddHours(22).AddMinutes(minutesAfterTen));
+        var request = NewRequest(Day.AddHours(22).AddMinutes(minutesAfterTen));
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.AddAsync(showtime, CancellationToken.None));
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.CreateAsync(request, Ct));
     }
 
     [Fact]
-    public async Task Add_WhenSameTimeOnAnotherScreen_DoesNotConflict()
+    public async Task Create_WhenSameTimeOnAnotherScreen_DoesNotConflict()
     {
-        var showtime = NewShowtime(Day.AddHours(20));
-        showtime.ScreenId = Guid.NewGuid();
+        var request = NewRequest(Day.AddHours(20)) with { ScreenId = Guid.NewGuid() };
 
-        var created = await _sut.AddAsync(showtime, CancellationToken.None);
+        var created = await _sut.CreateAsync(request, Ct);
 
-        Assert.Contains(created, _showtimes.Stored);
+        Assert.Contains(_showtimes.Stored, s => s.Id == created.Id);
     }
 
     [Fact]
-    public async Task Add_WhenSameTimeOnAnotherDay_DoesNotConflict()
+    public async Task Create_WhenSameTimeOnAnotherDay_DoesNotConflict()
     {
-        var showtime = NewShowtime(Day.AddDays(1).AddHours(20));
+        var created = await _sut.CreateAsync(NewRequest(Day.AddDays(1).AddHours(20)), Ct);
 
-        var created = await _sut.AddAsync(showtime, CancellationToken.None);
-
-        Assert.Contains(created, _showtimes.Stored);
+        Assert.Contains(_showtimes.Stored, s => s.Id == created.Id);
     }
 
     [Fact]
-    public async Task Add_WhenExistingShowtimeIsInactive_DoesNotConflict()
+    public async Task Create_WhenExistingShowtimeIsInactive_DoesNotConflict()
     {
         _existing.IsActive = false;
-        var showtime = NewShowtime(Day.AddHours(20));
 
-        var created = await _sut.AddAsync(showtime, CancellationToken.None);
+        var created = await _sut.CreateAsync(NewRequest(Day.AddHours(20)), Ct);
 
-        Assert.Contains(created, _showtimes.Stored);
+        Assert.Contains(_showtimes.Stored, s => s.Id == created.Id);
     }
 
     [Fact]
-    public async Task Add_GeneratesIdAndActivates_IgnoringClientValues()
+    public async Task Create_GeneratesIdActivatesAndSavesOnce()
     {
-        var clientId = Guid.NewGuid();
-        var showtime = NewShowtime(Day.AddHours(10));
-        showtime.Id = clientId;
-        showtime.IsActive = false;
+        var created = await _sut.CreateAsync(NewRequest(Day.AddHours(10)), Ct);
 
-        var created = await _sut.AddAsync(showtime, CancellationToken.None);
-
-        Assert.NotEqual(clientId, created.Id);
         Assert.NotEqual(Guid.Empty, created.Id);
         Assert.True(created.IsActive);
+        Assert.Equal(1, _unitOfWork.SaveCount);
     }
 
     // Comportamiento actual (#11 de la auditoría): se informa como conflicto. El lote 8 lo cambia.
     [Fact]
-    public async Task Add_WhenMovieDoesNotExist_ThrowsShowtimeConflictException()
+    public async Task Create_WhenMovieDoesNotExist_ThrowsShowtimeConflictException()
     {
-        var showtime = NewShowtime(Day.AddHours(10));
-        showtime.MovieId = Guid.NewGuid();
+        var request = NewRequest(Day.AddHours(10)) with { MovieId = Guid.NewGuid() };
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.AddAsync(showtime, CancellationToken.None));
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.CreateAsync(request, Ct));
     }
 
     [Fact]
     public async Task Update_WhenMovingOverItsOwnSlot_DoesNotConflictWithItself()
     {
-        var moved = NewShowtime(Day.AddHours(20).AddMinutes(30));
-        moved.Id = _existing.Id;
+        await _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(20).AddMinutes(30))), Ct);
 
-        await _sut.UpdateAsync(moved, CancellationToken.None);
-
-        Assert.Equal(Day.AddHours(20).AddMinutes(30), _showtimes.Stored.Single().StartTime);
+        Assert.Equal(Day.AddHours(20).AddMinutes(30), _existing.StartTime);
     }
 
     [Fact]
-    public async Task Update_WhenOverlapsAnotherShowtime_ThrowsShowtimeConflictException()
+    public async Task Update_WhenOverlapsAnotherShowtime_ThrowsAndLeavesItUnchanged()
     {
-        var other = NewShowtime(Day.AddHours(10));
-        other.Id = Guid.NewGuid();
-        _showtimes.Seed(other);
-        var moved = NewShowtime(Day.AddHours(21));
-        moved.Id = other.Id;
+        var other = SeedShowtime(Day.AddHours(10));
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.UpdateAsync(moved, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Delete_SetsInactiveWithoutRemovingTheRow()
-    {
-        await _sut.DeleteAsync(_existing.Id, CancellationToken.None);
-
-        Assert.False(Assert.Single(_showtimes.Stored).IsActive);
+        await Assert.ThrowsAsync<ShowtimeConflictException>(
+            () => _sut.UpdateAsync(other.Id, ToUpdate(NewRequest(Day.AddHours(21))), Ct));
+        Assert.Equal(Day.AddHours(10), other.StartTime);
+        Assert.Equal(0, _unitOfWork.SaveCount);
     }
 
     [Fact]
     public async Task Update_WhenShowtimeDoesNotExist_ThrowsNotFoundException()
     {
-        var missing = NewShowtime(Day.AddHours(10));
-        missing.Id = Guid.NewGuid();
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => _sut.UpdateAsync(Guid.NewGuid(), ToUpdate(NewRequest(Day.AddHours(10))), Ct));
+    }
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.UpdateAsync(missing, CancellationToken.None));
+    [Fact]
+    public async Task Delete_SetsInactiveWithoutRemovingTheRow()
+    {
+        await _sut.DeleteAsync(_existing.Id, Ct);
+
+        Assert.False(Assert.Single(_showtimes.Stored).IsActive);
     }
 
     [Fact]
@@ -165,14 +149,17 @@ public sealed class ShowtimeServiceTests
     {
         _existing.IsActive = false;
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DeleteAsync(_existing.Id, CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DeleteAsync(_existing.Id, Ct));
     }
 
-    private Showtime NewShowtime(DateTime start) => new()
+    private Showtime SeedShowtime(DateTime start)
     {
-        MovieId = _movie.Id,
-        ScreenId = _screenId,
-        StartTime = start,
-        Price = 10m,
-    };
+        var showtime = new Showtime { Id = Guid.NewGuid(), MovieId = _movie.Id, ScreenId = _screenId, StartTime = start, Price = 10m };
+        _showtimes.Seed(showtime);
+        return showtime;
+    }
+
+    private CreateShowtimeRequest NewRequest(DateTime start) => new(_movie.Id, _screenId, start, 10m);
+
+    private static UpdateShowtimeRequest ToUpdate(CreateShowtimeRequest r) => new(r.MovieId, r.ScreenId, r.StartTime, r.Price);
 }
