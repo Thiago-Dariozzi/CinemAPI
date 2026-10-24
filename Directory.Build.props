@@ -1,0 +1,19 @@
+<Project>
+  <!-- Configuración común a todos los proyectos de la solución. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Analizadores de .NET y reglas de estilo del .editorconfig aplicadas al compilar. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Necesario para que IDE0005 (usings sin uso) se reporte en el build. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Activar cuando el build quede sin warnings (lo hace /auditar-backend al final). -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
