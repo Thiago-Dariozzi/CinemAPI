@@ -38,7 +38,7 @@ Este archivo se carga en cada sesión. Las reglas detalladas viven en `.claude/s
 - **Consultas:** lecturas con `AsNoTracking`, `GetByIdAsync` trackeado para modificar; `IgnoreQueryFilters()` solo a propósito y comentado (ej. el email único cuenta usuarios dados de baja; la ocupación de una sala incluye películas dadas de baja).
 - **Tests:** `CinemAPI.Tests/` en carpetas espejo; fakes en memoria en `CinemAPI.Tests/Fakes` (sin librerías de mocking); integración contra **LocalDB** con una base temporal que aplica las migraciones (`SqlServerDatabaseFixture`). Nunca el proveedor InMemory.
 - **Verificación de cambios en la API:** además de los tests, levantar la API contra una base LocalDB aparte y probar los endpoints tocados con `Origin: http://localhost:5173` (estado, content-type, CORS, cuerpo). Los tests unitarios no detectan configuración inválida, consultas no traducibles ni errores de model binding.
-- **Build:** `TreatWarningsAsErrors` está activo; NU1902/NU1903 de `System.Security.Cryptography.Pkcs` quedan exceptuados hasta resolver #47.
+- **Build:** `TreatWarningsAsErrors` está activo, sin excepciones (incluye los avisos de paquetes vulnerables NU190x). `Infrastructure` referencia directamente `System.Security.Cryptography.Pkcs` para forzar la versión parcheada (#47).
 - **Pendiente (#48):** cuando se apruebe `Microsoft.Extensions.DependencyInjection.Abstractions` en `Application`, mover el registro de servicios de `Program.cs` a `AddApplication()`.
 
 ## Regla de dependencias (innegociable)
