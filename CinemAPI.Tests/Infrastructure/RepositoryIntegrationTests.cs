@@ -1,4 +1,8 @@
+using Application.DTOs.Genres;
+using Application.Interfaces;
+using Application.Services;
 using Domain.Entities;
+using Domain.Exceptions;
 using Infrastructure.Repositories;
 
 namespace CinemAPI.Tests.Infrastructure;
@@ -122,6 +126,35 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
     }
 
     [Fact]
+    public async Task SaveChanges_TranslatesUniqueIndexViolation_ToDomainException()
+    {
+        var name = $"Único {Guid.NewGuid():N}";
+        await SaveAsync(new Genre { Id = Guid.NewGuid(), Name = name });
+
+        await using var context = database.CreateContext();
+        context.Genres.Add(new Genre { Id = Guid.NewGuid(), Name = name.ToUpperInvariant() });
+
+        await Assert.ThrowsAsync<UniqueConstraintConflictException>(() => context.SaveChangesAsync());
+    }
+
+    // #45 de punta a punta: otro pedido inserta el mismo género entre la validación y el guardado.
+    [Fact]
+    public async Task GenreService_Create_WhenConcurrentInsertWinsTheRace_ThrowsGenreConflictException()
+    {
+        var name = $"Carrera {Guid.NewGuid():N}";
+        var winner = new Genre { Id = Guid.NewGuid(), Name = name };
+
+        await using var context = database.CreateContext();
+        var raceBeforeSave = new RaceUnitOfWork(context, () => SaveAsync(winner));
+        var sut = new GenreService(new GenreRepository(context), new MovieRepository(context), raceBeforeSave);
+
+        var ex = await Assert.ThrowsAsync<GenreConflictException>(
+            () => sut.CreateAsync(new CreateGenreRequest(name), CancellationToken.None));
+
+        Assert.Equal($"Ya existe un género equivalente: '{name}' (Id {winner.Id}).", ex.Message);
+    }
+
+    [Fact]
     public async Task UserRepository_GetByEmail_IgnoresCase()
     {
         var user = new User { Id = Guid.NewGuid(), Name = "Ana", Email = $"ana.{Guid.NewGuid():N}@cine.com", Password = "x" };
@@ -159,5 +192,14 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         var entity = await context.Set<T>().FindAsync(id);
         entity!.IsActive = false;
         await context.SaveChangesAsync();
+    }
+
+    private sealed class RaceUnitOfWork(IUnitOfWork inner, Func<Task> concurrentRequest) : IUnitOfWork
+    {
+        public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            await concurrentRequest();
+            return await inner.SaveChangesAsync(cancellationToken);
+        }
     }
 }

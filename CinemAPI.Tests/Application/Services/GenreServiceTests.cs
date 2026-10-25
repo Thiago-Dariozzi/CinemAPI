@@ -74,6 +74,35 @@ public sealed class GenreServiceTests
         Assert.True(created.IsActive);
     }
 
+    // #45: otro pedido guarda el mismo nombre entre la validación y el guardado; la base lo rechaza
+    // por el índice único y antes eso terminaba en un 500.
+    [Fact]
+    public async Task Create_WhenConcurrentRequestWinsTheRace_ThrowsSameDuplicateMessage()
+    {
+        var winner = new Genre { Id = Guid.NewGuid(), Name = "Drama" };
+        _unitOfWork.OnSave = () =>
+        {
+            _genres.Seed(winner);
+            throw new UniqueConstraintConflictException(new InvalidOperationException("índice único"));
+        };
+
+        var ex = await Assert.ThrowsAsync<GenreConflictException>(
+            () => _sut.CreateAsync(new CreateGenreRequest("drama"), CancellationToken.None));
+
+        Assert.Equal($"Ya existe un género equivalente: 'Drama' (Id {winner.Id}).", ex.Message);
+    }
+
+    [Fact]
+    public async Task Create_WhenUniqueIndexFailsButWinnerIsNotVisible_StillThrowsGenreConflictException()
+    {
+        _unitOfWork.OnSave = () => throw new UniqueConstraintConflictException(new InvalidOperationException("índice único"));
+
+        var ex = await Assert.ThrowsAsync<GenreConflictException>(
+            () => _sut.CreateAsync(new CreateGenreRequest("drama"), CancellationToken.None));
+
+        Assert.Equal("Ya existe un género equivalente: 'Drama'.", ex.Message);
+    }
+
     [Fact]
     public async Task Update_KeepingItsOwnName_DoesNotConflictWithItself()
     {

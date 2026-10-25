@@ -19,7 +19,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Recurso no encontrado"),
             InvalidReferenceException => (StatusCodes.Status400BadRequest, "Referencia inválida"),
-            GenreConflictException or ShowtimeConflictException or UserConflictException =>
+            GenreConflictException or ShowtimeConflictException or UserConflictException or UniqueConstraintConflictException =>
                 (StatusCodes.Status409Conflict, "Conflicto"),
             _ => (StatusCodes.Status400BadRequest, "Regla de negocio no cumplida"),
         };

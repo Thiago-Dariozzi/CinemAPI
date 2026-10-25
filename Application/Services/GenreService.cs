@@ -28,7 +28,7 @@ public sealed class GenreService(
 
         var genre = new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true };
         genreRepository.Add(genre);
-        await unitOfWork.SaveChangesAsync(ct);
+        await SaveAsync(genre, ct);
         return genre.ToResponse();
     }
 
@@ -40,7 +40,7 @@ public sealed class GenreService(
         await EnsureNoDuplicateAsync(name, excludeId: genre.Id, ct);
 
         genre.Name = name;
-        await unitOfWork.SaveChangesAsync(ct);
+        await SaveAsync(genre, ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
@@ -57,6 +57,21 @@ public sealed class GenreService(
 
         genre.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    // Dos pedidos simultáneos con el mismo nombre pueden pasar EnsureNoDuplicateAsync y chocar
+    // contra el índice único al guardar (#45): se busca el que ganó para responder el mismo 409.
+    private async Task SaveAsync(Genre genre, CancellationToken ct)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (UniqueConstraintConflictException)
+        {
+            await EnsureNoDuplicateAsync(genre.Name, excludeId: genre.Id, ct);
+            throw new GenreConflictException($"Ya existe un género equivalente: '{genre.Name}'.");
+        }
     }
 
     private async Task<Genre> GetEntityAsync(Guid id, CancellationToken ct) =>

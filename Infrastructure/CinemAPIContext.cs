@@ -1,5 +1,7 @@
 using Application.Interfaces;
 using Domain.Entities;
+using Domain.Exceptions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure;
@@ -17,5 +19,19 @@ public sealed class CinemAPIContext(DbContextOptions<CinemAPIContext> options) :
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CinemAPIContext).Assembly);
+    }
+
+    // 2601/2627: violación de índice único o de UNIQUE. Application no conoce EF ni SQL Server,
+    // así que se traduce acá a una excepción de dominio.
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            throw new UniqueConstraintConflictException(ex);
+        }
     }
 }
