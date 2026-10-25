@@ -72,7 +72,7 @@ public sealed class GenreService(
             return trimmed;
         }
 
-        return char.ToUpperInvariant(trimmed[0]) + trimmed.Substring(1);
+        return char.ToUpperInvariant(trimmed[0]) + trimmed[1..];
     }
 
     // Dos géneros son "el mismo" si su nombre coincide ignorando mayúsculas/minúsculas Y

@@ -39,6 +39,7 @@ public sealed class UserController(IUserService userService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateUser(Guid id, UpdateUserRequest request, CancellationToken ct)
     {
         await userService.UpdateAsync(id, request, ct);

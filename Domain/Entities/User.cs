@@ -11,5 +11,4 @@ public class User : IEntity
 
     public string Role { get; set; } = "Client";
     public bool IsActive { get; set; } = true;
-
 }
