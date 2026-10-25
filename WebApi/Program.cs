@@ -1,5 +1,4 @@
-using Application.Interfaces;
-using Application.Services;
+using Application;
 using Infrastructure;
 using Infrastructure.Data;
 using WebApi.ErrorHandling;
@@ -29,14 +28,8 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
+builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IMovieService, MovieService>();
-builder.Services.AddScoped<IScreenService, ScreenService>();
-builder.Services.AddScoped<ITicketService, TicketService>();
-builder.Services.AddScoped<IShowtimeService, ShowtimeService>();
-builder.Services.AddScoped<IGenreService, GenreService>();
 
 var app = builder.Build();
 

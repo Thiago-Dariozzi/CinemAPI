@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- Solo las abstracciones (IServiceCollection) para AddApplication(); el contenedor lo arma WebApi. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
     <ProjectReference Include="..\Domain\Domain.csproj" />
   </ItemGroup>
 

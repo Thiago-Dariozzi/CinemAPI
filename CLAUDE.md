@@ -39,7 +39,7 @@ Este archivo se carga en cada sesión. Las reglas detalladas viven en `.claude/s
 - **Tests:** `CinemAPI.Tests/` en carpetas espejo; fakes en memoria en `CinemAPI.Tests/Fakes` (sin librerías de mocking); integración contra **LocalDB** con una base temporal que aplica las migraciones (`SqlServerDatabaseFixture`). Nunca el proveedor InMemory.
 - **Verificación de cambios en la API:** además de los tests, levantar la API contra una base LocalDB aparte y probar los endpoints tocados con `Origin: http://localhost:5173` (estado, content-type, CORS, cuerpo). Los tests unitarios no detectan configuración inválida, consultas no traducibles ni errores de model binding.
 - **Build:** `TreatWarningsAsErrors` está activo, sin excepciones (incluye los avisos de paquetes vulnerables NU190x). `Infrastructure` referencia directamente `System.Security.Cryptography.Pkcs` para forzar la versión parcheada (#47).
-- **Pendiente (#48):** cuando se apruebe `Microsoft.Extensions.DependencyInjection.Abstractions` en `Application`, mover el registro de servicios de `Program.cs` a `AddApplication()`.
+- **Inyección de dependencias:** cada capa registra lo suyo: `Application/DependencyInjection.cs` (`AddApplication()`, servicios; el proyecto solo referencia `Microsoft.Extensions.DependencyInjection.Abstractions`) e `Infrastructure/DependencyInjection.cs` (`AddInfrastructure()`, contexto y repositorios). `DependencyInjectionTests` valida que todo el grafo se resuelva.
 
 ## Regla de dependencias (innegociable)
 
@@ -97,7 +97,7 @@ Cualquier cambio en rutas, verbos, nombres de campos JSON, códigos de estado o 
 - Nada de `ChangeTracker.Clear()` como parche: el servicio trae la entidad trackeada, la modifica y guarda.
 - Nada de métodos `new` que ocultan los de `BaseRepository`: usar filtros globales (`HasQueryFilter`) o `virtual`/`override`.
 - Configuración (cadena de conexión, orígenes CORS) en `appsettings`, no hardcodeada. Secretos fuera del repo (`dotnet user-secrets`).
-- Registro de dependencias en `AddApplication()` / `AddInfrastructure()`, no todo en `Program.cs` (hoy los servicios de Application siguen en `Program.cs` hasta resolver #48).
+- Registro de dependencias en `AddApplication()` / `AddInfrastructure()`, no todo en `Program.cs`.
 - Todo cambio de comportamiento lleva test; todo bug corregido lleva un test que lo reproduce.
 - No agregar paquetes NuGet sin decir por qué y sin preguntar.
 - Git: trabajar en una rama (`feature/...`, `fix/...` o `refactor/...`), commits chicos con Conventional Commits (`feat(showtime): ...`). No hacer `git push` ni commitear en `main` sin pedido explícito.
