@@ -8,10 +8,11 @@ using Domain.Interfaces;
 namespace Application.Services;
 
 // Orquesta IShowtimeRepository + IMovieRepository (necesito la duración de la
-// película para calcular solapamientos). La llama ShowtimeController.
+// película para calcular solapamientos) + IScreenRepository (la sala tiene que existir).
 public sealed class ShowtimeService(
     IShowtimeRepository showtimeRepository,
     IMovieRepository movieRepository,
+    IScreenRepository screenRepository,
     IUnitOfWork unitOfWork) : IShowtimeService
 {
     private const string EntityName = "la función";
@@ -75,22 +76,27 @@ public sealed class ShowtimeService(
 
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
     // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea
-    // parcialmente (tocarse justo en el borde no cuenta como choque). Solo compara
-    // funciones del mismo día calendario que StartTime.
+    // parcialmente (tocarse justo en el borde no cuenta como choque).
     private async Task ValidateNoOverlapAsync(Showtime showtime, CancellationToken ct)
     {
         var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct)
-            ?? throw new ShowtimeConflictException($"No se encontró la película con Id {showtime.MovieId}.");
+            ?? throw new InvalidReferenceException("la película", showtime.MovieId);
+        if (!await screenRepository.ExistsAsync(showtime.ScreenId, ct))
+        {
+            throw new InvalidReferenceException("la sala", showtime.ScreenId);
+        }
 
         var newStart = showtime.StartTime;
         var newEnd = newStart.AddMinutes(movie.DurationMinutes + Showtime.CleaningBufferMinutes);
 
-        // Una sola consulta trae las funciones de esa sala en ese día con la duración de su película.
-        var occupied = await showtimeRepository.GetOccupancyByScreenAndDateAsync(showtime.ScreenId, newStart, ct);
+        // Candidatas: las que empiezan desde 24 h antes (ninguna película dura un día, así que una
+        // función de la noche anterior que cruce la medianoche entra) hasta el fin de la nueva.
+        var occupied = await showtimeRepository.GetOccupancyByScreenAsync(
+            showtime.ScreenId, newStart.AddDays(-1), newEnd, ct);
 
         foreach (var other in occupied.Where(o => o.ShowtimeId != showtime.Id))
         {
-            var otherEnd = other.StartTime.AddMinutes((other.DurationMinutes ?? 0) + Showtime.CleaningBufferMinutes);
+            var otherEnd = other.StartTime.AddMinutes(other.DurationMinutes + Showtime.CleaningBufferMinutes);
 
             // Choque clásico de intervalos: se pisan si cada uno empieza antes de que
             // termine el otro. Con < (no <=) tocarse justo en el borde no cuenta.
@@ -98,7 +104,7 @@ public sealed class ShowtimeService(
             if (overlaps)
             {
                 throw new ShowtimeConflictException(
-                    $"La sala ya tiene programada la función '{other.MovieTitle ?? "otra película"}' " +
+                    $"La sala ya tiene programada la función '{other.MovieTitle}' " +
                     $"(Showtime Id {other.ShowtimeId}) de {other.StartTime:HH:mm} a {otherEnd:HH:mm} el " +
                     $"{other.StartTime:dd/MM/yyyy}; esta función se superpone con esa franja.");
             }

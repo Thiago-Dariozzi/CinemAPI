@@ -16,5 +16,9 @@ public class Movie : IEntity
     // precio real de venta sigue siendo Showtime.Price, editable función por función.
     public decimal? SuggestedPrice { get; set; }
 
+    // "En cartelera / fuera de cartelera": dato de negocio editable. No confundir con IsActive,
+    // que es solo la baja lógica.
+    public bool IsShowing { get; set; } = true;
+
     public bool IsActive { get; set; } = true;
 }

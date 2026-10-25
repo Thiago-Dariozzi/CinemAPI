@@ -6,5 +6,6 @@ public interface IBaseRepository<T> where T : class, IEntity
 {
     Task<IReadOnlyList<T>> GetAllAsync(CancellationToken ct);
     Task<T?> GetByIdAsync(Guid id, CancellationToken ct);
+    Task<bool> ExistsAsync(Guid id, CancellationToken ct);
     void Add(T entity);
 }

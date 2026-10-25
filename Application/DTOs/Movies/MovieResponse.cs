@@ -9,4 +9,5 @@ public sealed record MovieResponse(
     string ImageUrl,
     DateTime ReleaseDate,
     decimal? SuggestedPrice,
+    bool IsShowing,
     bool IsActive);

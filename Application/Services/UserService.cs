@@ -25,10 +25,7 @@ public sealed class UserService(IUserRepository userRepository, IUnitOfWork unit
 
     public async Task<UserResponse> CreateAsync(CreateUserRequest request, CancellationToken ct)
     {
-        if (await userRepository.GetByEmailAsync(request.Email, ct) != null)
-        {
-            throw new UserConflictException("Ya existe un usuario con ese email.");
-        }
+        await EnsureEmailIsFreeAsync(request.Email, excludeId: null, ct);
 
         var user = request.ToEntity();
         user.Id = Guid.NewGuid();
@@ -43,6 +40,8 @@ public sealed class UserService(IUserRepository userRepository, IUnitOfWork unit
     public async Task UpdateAsync(Guid id, UpdateUserRequest request, CancellationToken ct)
     {
         var user = await GetEntityAsync(id, ct);
+        await EnsureEmailIsFreeAsync(request.Email, excludeId: id, ct);
+
         request.ApplyTo(user);
         await unitOfWork.SaveChangesAsync(ct);
     }
@@ -52,6 +51,16 @@ public sealed class UserService(IUserRepository userRepository, IUnitOfWork unit
         var user = await GetEntityAsync(id, ct);
         user.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    // Cuenta también a los usuarios dados de baja: el índice único de Email los incluye, y sin
+    // este chequeo el alta terminaba en un 500 por violación del índice.
+    private async Task EnsureEmailIsFreeAsync(string email, Guid? excludeId, CancellationToken ct)
+    {
+        if (await userRepository.EmailExistsAsync(email, excludeId, ct))
+        {
+            throw new UserConflictException("Ya existe un usuario con ese email.");
+        }
     }
 
     private async Task<User> GetEntityAsync(Guid id, CancellationToken ct) =>

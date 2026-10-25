@@ -6,11 +6,25 @@ namespace CinemAPI.Tests.Fakes;
 
 public sealed class FakeGenreRepository : InMemoryRepository<Genre>, IGenreRepository;
 
+public sealed class FakeScreenRepository : InMemoryRepository<Screen>, IScreenRepository;
+
 public sealed class FakeUserRepository : InMemoryRepository<User>, IUserRepository
 {
     // Igual que la collation de la base: sin distinguir mayúsculas.
     public Task<User?> GetByEmailAsync(string email, CancellationToken ct) =>
-        Task.FromResult(Active().FirstOrDefault(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)));
+        Task.FromResult(Active().FirstOrDefault(u => SameEmail(u.Email, email)));
+
+    // Como el repositorio real: cuenta también a los dados de baja.
+    public Task<bool> EmailExistsAsync(string email, Guid? excludeId, CancellationToken ct) =>
+        Task.FromResult(Stored.Any(u => SameEmail(u.Email, email) && u.Id != excludeId));
+
+    private static bool SameEmail(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed class FakeTicketRepository : InMemoryRepository<Ticket>, ITicketRepository
+{
+    public Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Ticket>>(Active().Where(t => t.UserId == userId).ToList());
 }
 
 public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepository
@@ -38,21 +52,20 @@ public sealed class FakeShowtimeRepository(FakeMovieRepository movies) : InMemor
         Task.FromResult<IReadOnlyList<Showtime>>(Active().Where(s => s.MovieId == movieId).OrderBy(s => s.StartTime).ToList());
 
     public Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<Showtime>>(ByScreenAndDay(screenId, date).ToList());
-
-    public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAndDateAsync(
-        Guid screenId, DateTime date, CancellationToken ct)
-    {
-        var activeMovies = (await movies.GetAllAsync(ct)).ToDictionary(m => m.Id);
-        return ByScreenAndDay(screenId, date)
-            .Select(s => activeMovies.TryGetValue(s.MovieId, out var m)
-                ? new ShowtimeOccupancy(s.Id, s.StartTime, m.DurationMinutes, m.Title)
-                : new ShowtimeOccupancy(s.Id, s.StartTime, null, null))
-            .ToList();
-    }
-
-    private IEnumerable<Showtime> ByScreenAndDay(Guid screenId, DateTime date) =>
-        Active()
+        Task.FromResult<IReadOnlyList<Showtime>>(Active()
             .Where(s => s.ScreenId == screenId && s.StartTime >= date.Date && s.StartTime < date.Date.AddDays(1))
-            .OrderBy(s => s.StartTime);
+            .OrderBy(s => s.StartTime)
+            .ToList());
+
+    // Como el repositorio real: la duración sale aunque la película esté dada de baja.
+    public Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAsync(
+        Guid screenId, DateTime from, DateTime to, CancellationToken ct)
+    {
+        var allMovies = movies.Stored.ToDictionary(m => m.Id);
+        return Task.FromResult<IReadOnlyList<ShowtimeOccupancy>>(Active()
+            .Where(s => s.ScreenId == screenId && s.StartTime >= from && s.StartTime < to)
+            .OrderBy(s => s.StartTime)
+            .Select(s => new ShowtimeOccupancy(s.Id, s.StartTime, allMovies[s.MovieId].DurationMinutes, allMovies[s.MovieId].Title))
+            .ToList());
+    }
 }

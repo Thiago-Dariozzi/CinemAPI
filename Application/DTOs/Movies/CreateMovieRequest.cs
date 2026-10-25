@@ -16,4 +16,5 @@ public sealed record CreateMovieRequest(
     string? ImageUrl,
     DateTime ReleaseDate,
     [Range(0, 1_000_000, ErrorMessage = "El precio sugerido no puede ser negativo.")]
-    decimal? SuggestedPrice);
+    decimal? SuggestedPrice,
+    bool IsShowing = true);

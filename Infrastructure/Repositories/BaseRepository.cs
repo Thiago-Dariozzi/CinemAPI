@@ -16,5 +16,8 @@ public abstract class BaseRepository<T>(CinemAPIContext context) : IBaseReposito
     public virtual Task<T?> GetByIdAsync(Guid id, CancellationToken ct) =>
         Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct) =>
+        Context.Set<T>().AnyAsync(e => e.Id == id, ct);
+
     public void Add(T entity) => Context.Set<T>().Add(entity);
 }

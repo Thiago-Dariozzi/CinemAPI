@@ -18,6 +18,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
         var (status, title) = exception switch
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Recurso no encontrado"),
+            InvalidReferenceException => (StatusCodes.Status400BadRequest, "Referencia inválida"),
             GenreConflictException or ShowtimeConflictException or UserConflictException =>
                 (StatusCodes.Status409Conflict, "Conflicto"),
             _ => (StatusCodes.Status400BadRequest, "Regla de negocio no cumplida"),

@@ -14,6 +14,7 @@ public static class MovieMappings
         movie.ImageUrl,
         movie.ReleaseDate,
         movie.SuggestedPrice,
+        movie.IsShowing,
         movie.IsActive);
 
     // GetValueOrDefault: [Required] ya garantizó el valor antes de llegar al servicio.
@@ -26,6 +27,7 @@ public static class MovieMappings
         ImageUrl = request.ImageUrl ?? string.Empty,
         ReleaseDate = request.ReleaseDate,
         SuggestedPrice = request.SuggestedPrice,
+        IsShowing = request.IsShowing,
     };
 
     public static void ApplyTo(this UpdateMovieRequest request, Movie movie)
@@ -37,5 +39,6 @@ public static class MovieMappings
         movie.ImageUrl = request.ImageUrl ?? string.Empty;
         movie.ReleaseDate = request.ReleaseDate;
         movie.SuggestedPrice = request.SuggestedPrice;
+        movie.IsShowing = request.IsShowing;
     }
 }

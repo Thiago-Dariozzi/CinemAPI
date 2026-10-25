@@ -10,5 +10,7 @@ public interface IShowtimeRepository : IBaseRepository<Showtime>
     // Funciones que empiezan ese día calendario; la hora que venga en date se ignora.
     Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct);
 
-    Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct);
+    // Funciones activas de la sala que empiezan en [from, to), con la duración de su película.
+    Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAsync(
+        Guid screenId, DateTime from, DateTime to, CancellationToken ct);
 }

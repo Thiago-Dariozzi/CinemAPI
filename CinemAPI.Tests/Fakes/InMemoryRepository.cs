@@ -19,6 +19,8 @@ public abstract class InMemoryRepository<T> : IBaseRepository<T> where T : class
     public Task<T?> GetByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(Active().FirstOrDefault(e => e.Id == id));
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct) => Task.FromResult(Active().Any(e => e.Id == id));
+
     public void Add(T entity) => _items.Add(entity);
 
     protected IEnumerable<T> Active() => _items.Where(e => e.IsActive);

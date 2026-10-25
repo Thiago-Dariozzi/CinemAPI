@@ -65,6 +65,9 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsShowing")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("ReleaseDate")
                         .HasColumnType("datetime2");
 

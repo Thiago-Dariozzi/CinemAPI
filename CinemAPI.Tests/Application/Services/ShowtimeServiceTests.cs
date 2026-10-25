@@ -13,6 +13,7 @@ public sealed class ShowtimeServiceTests
 
     private readonly FakeShowtimeRepository _showtimes;
     private readonly FakeMovieRepository _movies = new();
+    private readonly FakeScreenRepository _screens = new();
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly ShowtimeService _sut;
 
@@ -26,8 +27,9 @@ public sealed class ShowtimeServiceTests
     {
         _showtimes = new FakeShowtimeRepository(_movies);
         _movies.Seed(_movie);
+        _screens.Seed(new Screen { Id = _screenId, Name = "Sala 1", Capacity = 100 });
         _existing = SeedShowtime(Day.AddHours(20));
-        _sut = new ShowtimeService(_showtimes, _movies, _unitOfWork);
+        _sut = new ShowtimeService(_showtimes, _movies, _screens, _unitOfWork);
     }
 
     [Theory]
@@ -66,7 +68,9 @@ public sealed class ShowtimeServiceTests
     [Fact]
     public async Task Create_WhenSameTimeOnAnotherScreen_DoesNotConflict()
     {
-        var request = NewRequest(Day.AddHours(20)) with { ScreenId = Guid.NewGuid() };
+        var otherScreen = new Screen { Id = Guid.NewGuid(), Name = "Sala 2", Capacity = 50 };
+        _screens.Seed(otherScreen);
+        var request = NewRequest(Day.AddHours(20)) with { ScreenId = otherScreen.Id };
 
         var created = await _sut.CreateAsync(request, Ct);
 
@@ -101,13 +105,64 @@ public sealed class ShowtimeServiceTests
         Assert.Equal(1, _unitOfWork.SaveCount);
     }
 
-    // Comportamiento actual (#11 de la auditoría): se informa como conflicto. El lote 8 lo cambia.
+    // Antes se informaba como conflicto (409); es un error del pedido (#11 de la auditoría).
     [Fact]
-    public async Task Create_WhenMovieDoesNotExist_ThrowsShowtimeConflictException()
+    public async Task Create_WhenMovieDoesNotExist_ThrowsInvalidReferenceException()
     {
         var request = NewRequest(Day.AddHours(10)) with { MovieId = Guid.NewGuid() };
 
-        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.CreateAsync(request, Ct));
+        await Assert.ThrowsAsync<InvalidReferenceException>(() => _sut.CreateAsync(request, Ct));
+    }
+
+    [Fact]
+    public async Task Create_WhenScreenDoesNotExist_ThrowsInvalidReferenceException()
+    {
+        var request = NewRequest(Day.AddHours(10)) with { ScreenId = Guid.NewGuid() };
+
+        await Assert.ThrowsAsync<InvalidReferenceException>(() => _sut.CreateAsync(request, Ct));
+        Assert.Equal(0, _unitOfWork.SaveCount);
+    }
+
+    // Bug #4: antes solo se comparaban funciones del mismo día calendario.
+    [Theory]
+    [InlineData(0, 30, true)]   // la de las 23:00 del día anterior ocupa la sala hasta la 01:15
+    [InlineData(1, 14, true)]
+    [InlineData(1, 15, false)]  // empieza justo cuando se libera
+    public async Task Create_DetectsOverlapWithShowtimeCrossingMidnight(int hour, int minute, bool shouldConflict)
+    {
+        SeedShowtime(Day.AddHours(-1)); // 23:00 del día anterior, 120 + 15 min
+
+        var act = () => _sut.CreateAsync(NewRequest(Day.AddHours(hour).AddMinutes(minute)), Ct);
+
+        if (shouldConflict)
+        {
+            await Assert.ThrowsAsync<ShowtimeConflictException>(act);
+        }
+        else
+        {
+            await act();
+        }
+    }
+
+    [Fact]
+    public async Task Create_WhenNewShowtimeCrossesMidnightIntoNextDayShowtime_ThrowsShowtimeConflictException()
+    {
+        SeedShowtime(Day.AddDays(1).AddMinutes(30)); // 00:30 del día siguiente
+
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.CreateAsync(NewRequest(Day.AddHours(23)), Ct));
+    }
+
+    // Bug #5: antes una película dada de baja contaba como 0 minutos y la sala quedaba "libre".
+    [Fact]
+    public async Task Create_WhenExistingShowtimeMovieWasDeleted_StillBlocksItsWholeDuration()
+    {
+        var deletedMovie = new Movie { Id = Guid.NewGuid(), Title = "Borrada", DurationMinutes = 120, IsActive = false };
+        _movies.Seed(deletedMovie);
+        var showtime = new Showtime { Id = Guid.NewGuid(), MovieId = deletedMovie.Id, ScreenId = _screenId, StartTime = Day.AddHours(10) };
+        _showtimes.Seed(showtime);
+
+        var ex = await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.CreateAsync(NewRequest(Day.AddHours(11)), Ct));
+        Assert.Contains("'Borrada'", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

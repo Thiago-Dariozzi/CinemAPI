@@ -7,7 +7,10 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork unitOfWork) : IMovieService
+public sealed class MovieService(
+    IMovieRepository movieRepository,
+    IGenreRepository genreRepository,
+    IUnitOfWork unitOfWork) : IMovieService
 {
     private const string EntityName = "la película";
 
@@ -29,6 +32,8 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
     public async Task<MovieResponse> CreateAsync(CreateMovieRequest request, CancellationToken ct)
     {
         var movie = request.ToEntity();
+        await EnsureGenreExistsAsync(movie.GenreId, ct);
+
         movie.Id = Guid.NewGuid();
         movie.IsActive = true;
         movieRepository.Add(movie);
@@ -39,6 +44,13 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
     public async Task UpdateAsync(Guid id, UpdateMovieRequest request, CancellationToken ct)
     {
         var movie = await GetEntityAsync(id, ct);
+
+        // Solo si cambia: una película cuyo género se dio de baja se puede seguir editando.
+        if (request.GenreId != movie.GenreId)
+        {
+            await EnsureGenreExistsAsync(request.GenreId.GetValueOrDefault(), ct);
+        }
+
         request.ApplyTo(movie);
         await unitOfWork.SaveChangesAsync(ct);
     }
@@ -52,6 +64,14 @@ public sealed class MovieService(IMovieRepository movieRepository, IUnitOfWork u
 
     private async Task<Movie> GetEntityAsync(Guid id, CancellationToken ct) =>
         await movieRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    private async Task EnsureGenreExistsAsync(Guid genreId, CancellationToken ct)
+    {
+        if (!await genreRepository.ExistsAsync(genreId, ct))
+        {
+            throw new InvalidReferenceException("el género", genreId);
+        }
+    }
 
     private static List<MovieResponse> ToResponses(IEnumerable<Movie> movies) =>
         movies.Select(m => m.ToResponse()).ToList();

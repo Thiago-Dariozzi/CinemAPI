@@ -26,22 +26,37 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
     }
 
     [Fact]
-    public async Task ShowtimeRepository_GetOccupancy_IncludesDurationAndTitle_AndNullWhenMovieInactive()
+    public async Task ShowtimeRepository_GetOccupancy_UsesTimeWindow_AndKeepsDurationOfDeletedMovies()
     {
         var (_, movie, screen) = await SeedCatalogAsync(durationMinutes: 95);
         var (_, deletedMovie, _) = await SeedCatalogAsync(durationMinutes: 150);
-        var showtime = NewShowtime(movie, screen, Day.AddHours(14));
+        var previousNight = NewShowtime(movie, screen, Day.AddHours(-1));
         var orphan = NewShowtime(deletedMovie, screen, Day.AddHours(18));
-        await SaveAsync(showtime, orphan);
+        var outsideWindow = NewShowtime(movie, screen, Day.AddHours(22));
+        await SaveAsync(previousNight, orphan, outsideWindow);
         await DeactivateAsync<Movie>(deletedMovie.Id);
 
         await using var context = database.CreateContext();
-        var occupancy = (await new ShowtimeRepository(context).GetOccupancyByScreenAndDateAsync(screen.Id, Day, CancellationToken.None)).ToList();
+        var occupancy = await new ShowtimeRepository(context)
+            .GetOccupancyByScreenAsync(screen.Id, Day.AddHours(-2), Day.AddHours(20), CancellationToken.None);
 
-        Assert.Equal(2, occupancy.Count);
-        Assert.Equal((95, movie.Title), (occupancy[0].DurationMinutes!.Value, occupancy[0].MovieTitle));
-        Assert.Null(occupancy[1].DurationMinutes);
-        Assert.Null(occupancy[1].MovieTitle);
+        Assert.Equal([previousNight.Id, orphan.Id], occupancy.Select(o => o.ShowtimeId));
+        Assert.Equal((95, movie.Title), (occupancy[0].DurationMinutes, occupancy[0].MovieTitle));
+        Assert.Equal((150, deletedMovie.Title), (occupancy[1].DurationMinutes, occupancy[1].MovieTitle));
+    }
+
+    [Fact]
+    public async Task UserRepository_EmailExists_CountsDeletedUsers_AndCanExcludeOne()
+    {
+        var deleted = new User { Id = Guid.NewGuid(), Name = "Baja", Email = $"baja.{Guid.NewGuid():N}@cine.com", Password = "x", IsActive = false };
+        await SaveAsync(deleted);
+
+        await using var context = database.CreateContext();
+        var repository = new UserRepository(context);
+
+        Assert.True(await repository.EmailExistsAsync(deleted.Email.ToUpperInvariant(), excludeId: null, CancellationToken.None));
+        Assert.False(await repository.EmailExistsAsync(deleted.Email, excludeId: deleted.Id, CancellationToken.None));
+        Assert.False(await repository.EmailExistsAsync($"nadie.{Guid.NewGuid():N}@cine.com", excludeId: null, CancellationToken.None));
     }
 
     [Fact]

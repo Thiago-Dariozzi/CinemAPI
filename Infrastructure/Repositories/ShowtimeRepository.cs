@@ -18,36 +18,34 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
             .OrderBy(s => s.StartTime)
             .ToListAsync(ct);
 
-    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
-        await ByScreenAndDay(screenId, date)
+    // Rango [día, día + 1) en vez de StartTime.Date == date: así puede usar el índice (ScreenId, StartTime).
+    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
+    {
+        var dayStart = date.Date;
+        var dayEnd = dayStart.AddDays(1);
+        return await Context.Showtimes.AsNoTracking()
+            .Where(s => s.ScreenId == screenId && s.StartTime >= dayStart && s.StartTime < dayEnd)
             .OrderBy(s => s.StartTime)
             .ToListAsync(ct);
+    }
 
-    // Left join: si la película fue dada de baja, el filtro global la oculta y la función
-    // vuelve con duración null (el servicio decide qué hacer en ese caso).
-    public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAndDateAsync(
-        Guid screenId, DateTime date, CancellationToken ct)
+    // IgnoreQueryFilters en películas a propósito: si la película se dio de baja pero la función
+    // sigue activa, la sala sigue ocupada durante toda su duración. La FK garantiza que existe.
+    public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAsync(
+        Guid screenId, DateTime from, DateTime to, CancellationToken ct)
     {
-        var rows = await ByScreenAndDay(screenId, date)
+        var rows = await Context.Showtimes.AsNoTracking()
+            .Where(s => s.ScreenId == screenId && s.StartTime >= from && s.StartTime < to)
             .OrderBy(s => s.StartTime)
-            .LeftJoin(Context.Movies, s => s.MovieId, m => m.Id, (s, m) => new
+            .Join(Context.Movies.IgnoreQueryFilters(), s => s.MovieId, m => m.Id, (s, m) => new
             {
                 s.Id,
                 s.StartTime,
-                DurationMinutes = m == null ? (int?)null : m.DurationMinutes,
-                Title = m == null ? null : m.Title,
+                m.DurationMinutes,
+                m.Title,
             })
             .ToListAsync(ct);
 
         return rows.Select(r => new ShowtimeOccupancy(r.Id, r.StartTime, r.DurationMinutes, r.Title)).ToList();
-    }
-
-    // Rango [día, día + 1) en vez de StartTime.Date == date: así puede usar el índice (ScreenId, StartTime).
-    private IQueryable<Showtime> ByScreenAndDay(Guid screenId, DateTime date)
-    {
-        var dayStart = date.Date;
-        var dayEnd = dayStart.AddDays(1);
-        return Context.Showtimes.AsNoTracking()
-            .Where(s => s.ScreenId == screenId && s.StartTime >= dayStart && s.StartTime < dayEnd);
     }
 }

@@ -32,6 +32,26 @@ public sealed class UserServiceTests
         Assert.Equal(0, _unitOfWork.SaveCount);
     }
 
+    // Bug #2: el índice único incluye usuarios dados de baja; antes esto era un 500.
+    [Fact]
+    public async Task Create_WhenEmailBelongsToADeletedUser_ThrowsUserConflictException()
+    {
+        _ana.IsActive = false;
+
+        await Assert.ThrowsAsync<UserConflictException>(
+            () => _sut.CreateAsync(new CreateUserRequest("Nueva", "ana@cine.com", "y", null), Ct));
+    }
+
+    [Fact]
+    public async Task Update_ToAnotherUsersEmail_ThrowsUserConflictException()
+    {
+        var beto = new User { Id = Guid.NewGuid(), Name = "Beto", Email = "beto@cine.com", Password = "z" };
+        _users.Seed(beto);
+
+        await Assert.ThrowsAsync<UserConflictException>(
+            () => _sut.UpdateAsync(beto.Id, new UpdateUserRequest("Beto", "ana@cine.com", null), Ct));
+    }
+
     [Fact]
     public async Task Create_GeneratesIdActivatesAndDefaultsRoleToClient()
     {
