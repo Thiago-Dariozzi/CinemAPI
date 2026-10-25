@@ -13,7 +13,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
-    <!-- Activar cuando el build quede sin warnings (lo hace /auditar-backend al final). -->
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Cualquier warning nuevo rompe el build. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Excepción temporal: vulnerabilidad de System.Security.Cryptography.Pkcs (transitiva de
+         Microsoft.Data.SqlClient vía EF Core SqlServer). Corregirla exige una referencia directa al
+         paquete; pendiente de decisión (ver docs/auditoria-backend.md #47). Quitar al resolverla. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1902;NU1903</WarningsNotAsErrors>
   </PropertyGroup>
 </Project>
