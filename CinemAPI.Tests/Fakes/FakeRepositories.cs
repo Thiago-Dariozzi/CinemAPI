@@ -32,8 +32,8 @@ public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepos
     public Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
         List(Active().Where(m => string.Equals(m.Title, title, StringComparison.OrdinalIgnoreCase)));
 
-    public Task<IReadOnlyList<Movie>> GetActiveMoviesAsync(CancellationToken ct) =>
-        List(Active().OrderByDescending(m => m.ReleaseDate));
+    public Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(CancellationToken ct) =>
+        List(Active().Where(m => m.IsShowing).OrderByDescending(m => m.ReleaseDate));
 
     public Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
         List(Active().Where(m => m.GenreId == genreId));

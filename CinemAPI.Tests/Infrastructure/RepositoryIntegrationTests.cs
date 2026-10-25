@@ -104,6 +104,23 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         Assert.Equal(1, await repository.CountByGenreAsync(genre.Id, CancellationToken.None));
     }
 
+    // GET /api/movie/active: solo las activas y en cartelera.
+    [Fact]
+    public async Task MovieRepository_GetShowingMovies_ExcludesNotShowingAndDeleted()
+    {
+        var (genre, showing, _) = await SeedCatalogAsync(durationMinutes: 100);
+        var notShowing = new Movie { Id = Guid.NewGuid(), Title = "Fuera de cartelera", GenreId = genre.Id, DurationMinutes = 90, IsShowing = false };
+        var deleted = new Movie { Id = Guid.NewGuid(), Title = "Dada de baja", GenreId = genre.Id, DurationMinutes = 90, IsActive = false };
+        await SaveAsync(notShowing, deleted);
+
+        await using var context = database.CreateContext();
+        var ids = (await new MovieRepository(context).GetShowingMoviesAsync(CancellationToken.None)).Select(m => m.Id).ToList();
+
+        Assert.Contains(showing.Id, ids);
+        Assert.DoesNotContain(notShowing.Id, ids);
+        Assert.DoesNotContain(deleted.Id, ids);
+    }
+
     [Fact]
     public async Task UserRepository_GetByEmail_IgnoresCase()
     {

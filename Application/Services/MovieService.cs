@@ -14,8 +14,8 @@ public sealed class MovieService(
 {
     private const string EntityName = "la película";
 
-    public async Task<IReadOnlyList<MovieResponse>> GetActiveMoviesAsync(CancellationToken ct) =>
-        ToResponses(await movieRepository.GetActiveMoviesAsync(ct));
+    public async Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(CancellationToken ct) =>
+        ToResponses(await movieRepository.GetShowingMoviesAsync(ct));
 
     public async Task<IReadOnlyList<MovieResponse>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
         ToResponses(await movieRepository.GetByGenreAsync(genreId, ct));

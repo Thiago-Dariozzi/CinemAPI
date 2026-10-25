@@ -10,8 +10,8 @@ public sealed class MovieController(IMovieService movieService) : ControllerBase
 {
     [HttpGet("active")]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetActiveMovies(CancellationToken ct) =>
-        Ok(await movieService.GetActiveMoviesAsync(ct));
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetShowingMovies(CancellationToken ct) =>
+        Ok(await movieService.GetShowingMoviesAsync(ct));
 
     [HttpGet("genre/{genreId:guid}")]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]

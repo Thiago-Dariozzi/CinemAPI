@@ -62,6 +62,17 @@ public sealed class MovieServiceTests
     }
 
     [Fact]
+    public async Task GetShowingMovies_ExcludesMoviesNotShowing()
+    {
+        var showing = await _sut.CreateAsync(NewRequest(_drama.Id), Ct);
+        await _sut.CreateAsync(NewRequest(_drama.Id) with { IsShowing = false }, Ct);
+
+        var listed = await _sut.GetShowingMoviesAsync(Ct);
+
+        Assert.Equal(showing.Id, Assert.Single(listed).Id);
+    }
+
+    [Fact]
     public async Task Update_WhenItsGenreWasDeleted_CanStillBeEditedWithoutChangingIt()
     {
         var created = await _sut.CreateAsync(NewRequest(_drama.Id), Ct);
