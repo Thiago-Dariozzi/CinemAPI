@@ -37,7 +37,7 @@ Severidades: **Crítica** (seguridad, pérdida de datos, bug) · **Alta** (viola
 | 19 | Media | `GenreService.cs:82` | EF | H11: trae todos los géneros (trackeados) para comparar en memoria | **Propuesta:** mantener la comparación en el servicio (proyectando solo `Id`/`Name` sin tracking). Pasarla a la base cambia la semántica: con `Modern_Spanish_CI_AI` "Año" ≠ "Ano", con `IgnoreNonSpace` son iguales | No | 3 | ✅ `a20bff1` (decisión: queda en el servicio, sin tracking; test "Año"/"Ano") |
 | 20 | Media | Toda la solución | Async | H12: sin `CancellationToken`, 39 métodos sin sufijo `Async`, retornos `IEnumerable` diferidos | Propagar `CancellationToken`, renombrar, `IReadOnlyList<T>` | No | 4 | ✅ `20c6ac4` |
 | 21 | Media | `Program.cs:14-23` | Config | H13: CORS `http://localhost:5173` hardcodeado | `Cors:AllowedOrigins` en appsettings | No | 2 | ✅ `d4731be` |
-| 22 | Media | `Program.cs:30-43` | Capas | H13: DI de repositorios y servicios en `Program.cs` | `AddApplication()` / `AddInfrastructure(configuration)` | No | 2 | ⚠️ parcial: `AddInfrastructure` ✅ `d4731be`; `AddApplication()` pendiente de #48 |
+| 22 | Media | `Program.cs:30-43` | Capas | H13: DI de repositorios y servicios en `Program.cs` | `AddApplication()` / `AddInfrastructure(configuration)` | No | 2 | ✅ `AddInfrastructure` en `d4731be`; `AddApplication()` en `54e7576` (con #48) |
 | 23 | Media | `Program.cs:46-50` | Config | H14: `DbSeeder` corre en todos los ambientes | Solo en Development | No | 2 | ✅ `d4731be` |
 | 24 | Media | `CinemAPIContext.cs:19-82` | EF | H15: toda la configuración en `OnModelCreating` | `IEntityTypeConfiguration<T>` + `ApplyConfigurationsFromAssembly` (migración vacía) | No | 3 | ✅ `a20bff1` (modelo sin cambios, verificado con `has-pending-model-changes`) |
 | 25 | Media | `ShowtimeController.cs:50` | Contrato | H16: `date` puede faltar y queda en `01/01/0001` | Obligatorio → 400 | Sí (validación nueva) | 6 | ✅ `4face1e` (`DateOnly` + `BindRequired`) |
@@ -60,20 +60,21 @@ Severidades: **Crítica** (seguridad, pérdida de datos, bug) · **Alta** (viola
 | 42 | Baja | `GenreConflictException.cs:5`, `ShowtimeConflictException.cs:5`, `ShowtimeService.cs:40`, `ShowtimeRepository.cs:8,47` | Comentarios | **Nuevo.** Comentarios que quedan falsos con el refactor ("el controller la traduce a 409", "reusado por ValidateNoOverlap", "re-implemento con new") | Actualizarlos en el lote que cambia ese código (no se borran en masa) | No | 2–5 | ✅ actualizados en cada lote |
 | 43 | Baja | Los 4 `.csproj` | Config | **Nuevo.** `Nullable`/`ImplicitUsings` duplicados con `Directory.Build.props` | Quitar de los `.csproj` | No | 2 | ✅ `d4731be` |
 | 44 | Baja | `Screen.cs:10`, `Ticket.cs:13` | Modelo | **Nuevo.** `IsActive` sin `= true` (las demás entidades sí lo tienen) | `= true` (el servicio y el seeder ya lo setean: sin cambio observable) | No | 2 | ✅ `d4731be` |
-| 45 | Baja | `GenreService.Add` / índice único | Errores | **Nuevo.** Dos altas simultáneas del mismo género pasan el chequeo y la segunda revienta el índice único → 500 | Traducir la violación de índice único a 409 en el handler | Sí: 500 → 409 | — | pendiente (bajo impacto) |
+| 45 | Baja | `GenreService.Add` / índice único | Errores | **Nuevo.** Dos altas simultáneas del mismo género pasan el chequeo y la segunda revienta el índice único → 500 | Traducir la violación de índice único a 409 en el handler | Sí: 500 → 409 | — | ✅ `ca90668`: `CinemAPIContext` traduce 2601/2627 a `UniqueConstraintConflictException`; `GenreService` responde el mismo mensaje de duplicado. Smoke: 12 altas simultáneas → 1 × 201, 11 × 409 |
 | 46 | Baja | Todos los controllers | Contrato | **Nuevo.** Rutas `{id}` sin `:guid`: un id mal formado da 400 en vez de 404 | `{id:guid}` | Sí: 400 → 404 en ids inválidos | 6 | ✅ `4face1e` |
 
-**Totales: 7 Críticas · 6 Altas · 19 Medias · 14 Bajas (46). Al cierre: 44 ✅ · 1 parcial (#22) · 1 pendiente (#45).**
+**Totales: 7 Críticas · 6 Altas · 19 Medias · 14 Bajas (46). Al cierre: 46 ✅.**
 
 ### Encontrados durante la corrección
 
 | # | Sev. | Dónde | Problema | Estado |
 |---|---|---|---|---|
-| 47 | Alta | `Infrastructure` → `Microsoft.Data.SqlClient` 6.1.7 → `System.Security.Cryptography.Pkcs` 9.0.11 | NU1902/NU1903: vulnerabilidad moderada y alta en un paquete transitivo. **Ya estaba en `main`** (con Pkcs 9.0.4); no apareció en la línea de base porque el build usaba datos de vulnerabilidades cacheados. Ni EF 10.0.13 la corrige | ⚠️ **requiere decisión**: agregar una referencia directa a una versión corregida de `System.Security.Cryptography.Pkcs` (paquete nuevo). Mientras tanto, NU1902/NU1903 están en `WarningsNotAsErrors` |
-| 48 | Media | `Application` | `AddApplication()` necesita `IServiceCollection`, que viene del paquete `Microsoft.Extensions.DependencyInjection.Abstractions` | ⚠️ **requiere decisión** (paquete nuevo). Hoy los servicios se registran por interfaz en `Program.cs` |
+| 47 | Alta | `Infrastructure` → `Microsoft.Data.SqlClient` 6.1.7 → `System.Security.Cryptography.Pkcs` 9.0.11 | NU1902/NU1903: vulnerabilidad moderada y alta en un paquete transitivo. **Ya estaba en `main`** (con Pkcs 9.0.4); no apareció en la línea de base porque el build usaba datos de vulnerabilidades cacheados. Ni EF 10.0.13 la corrige | ✅ `bb1929f` (aprobado por el usuario): referencia directa a `System.Security.Cryptography.Pkcs` 10.0.13 (primera versión corregida de la rama 10) en `Infrastructure`; se quitó la excepción de `WarningsNotAsErrors`. `dotnet list package --vulnerable` queda limpio. Se puede quitar cuando SqlClient dependa de una versión corregida |
+| 48 | Media | `Application` | `AddApplication()` necesita `IServiceCollection`, que viene del paquete `Microsoft.Extensions.DependencyInjection.Abstractions` | ✅ `54e7576` (aprobado por el usuario): `Microsoft.Extensions.DependencyInjection.Abstractions` 10.0.13 en `Application` y `Application/DependencyInjection.cs`. Los tests de arquitectura siguen en verde; `DependencyInjectionTests` valida que cada `I*Service` esté registrado y que el grafo se resuelva |
 | 49 | Crítica | `WebApi/appsettings.json` | Regresión que **introduje en el lote 2**: el JSON quedó con `\M` sin escapar y la API no arrancaba. Ningún test cargaba la configuración | ✅ `2b76e87` + test que valida el archivo |
 | 50 | Crítica | `ShowtimeRepository` | Durante el lote 3, el `GroupJoin` del solapamiento no era traducible por EF (500 al crear funciones). Nunca llegó a un commit: lo detectó el test de integración contra SQL Server | ✅ resuelto con `LeftJoin`/`Join` dentro de `a20bff1` |
 | 51 | Crítica | DTOs (lote 6) | Las validaciones con `[property: Required]` (como el ejemplo de la skill) hacían que MVC respondiera 500 en cada request con body. Lo detectó el smoke test contra la API real antes del commit | ✅ `4face1e`: atributos en los parámetros + test de contrato + skill corregida |
+| 52 | Media | `GET /api/movie/active` | Devolvía las películas no borradas, no las que están en cartelera (`IsShowing`) | ✅ `dbdb76b` (decisión del usuario): filtra activas **y** `IsShowing = true`. Misma ruta y forma de respuesta; test de servicio y de integración. El front todavía no lo usa (ver pendientes del front) |
 
 ## Plan de lotes
 
@@ -97,8 +98,8 @@ Ejecutado: todos los lotes, en ese orden. #13 se resolvió en el lote 8 por deci
 
 | Verificación | Resultado |
 |---|---|
-| `dotnet build CinemAPI.slnx` | 0 errores, 0 warnings de código, con `TreatWarningsAsErrors`. Solo NU1902/NU1903 (#47) |
-| `dotnet test CinemAPI.slnx` | 83 tests en verde: unitarios con fakes, integración y migración contra LocalDB, arquitectura y contrato |
+| `dotnet build CinemAPI.slnx` | 0 errores, 0 warnings (incluidos los de paquetes vulnerables), con `TreatWarningsAsErrors` sin excepciones |
+| `dotnet test CinemAPI.slnx` | 92 tests en verde: unitarios con fakes, integración y migración contra LocalDB, arquitectura y contrato |
 | `dotnet format --verify-no-changes` | OK |
 | Front (`cine-frontend`) | `npm run build` OK; `eslint` pasó de 27 a 25 errores, todos previos (ver abajo) |
 
@@ -122,12 +123,11 @@ Revisó todo el diff `main...HEAD`. No encontró violaciones de capas, `try/catc
 - **Modelo anémico** (setters públicos).
 - **Idioma de los comentarios.**
 - **Qué pasa con las funciones de una película dada de baja** (siguen activas y se listan). El #5 solo arregla el solapamiento.
-- **#47 y #48**: paquetes nuevos (ver arriba).
 - **Rol al crear usuarios**: cualquiera puede crear un usuario `Admin` por la API (no hay autenticación). Va con la deuda de auth.
-- **`GET /api/movie/active`** devuelve las películas no borradas, no las que están "en cartelera" (`IsShowing`). Ningún componente del front lo usa. Definir si debe filtrar por `IsShowing`.
 
 ## Hallazgos fuera de alcance (front)
 
+- **Pendiente para la sesión del front:** que la Cartelera del usuario (`pages/UserCartelera.jsx`) use `GET /api/movie/active` (ya existe `getActiveMovies` en `movieApi.js`), que ahora devuelve solo las películas en cartelera (#52).
 - ~~`screenApi.js:17` · `getActiveScreens`~~ → se eliminó en `81dcd42` porque estaba en un archivo tocado.
 - `eslint`: 25 errores `no-unused-vars` previos, casi todos `import React` sin usar (con el JSX automático no hace falta): `App.jsx`, `Genres/{GenreCard,GenreContainer,NewGenre,genreFields}.jsx`, `Layout/{AppLayout,Sidebar}.jsx`, `Movies/{Dashboard,MovieContainer,NewMovie}.jsx`, `Screens/{NewScreen,ScreenCard,ScreenContainer,ScreenDashboard,screenFields}.jsx`, `Showtimes/MovieFunctionsPanel.jsx`, `Tickets/NewTicket.jsx` (además `152:13`), `Users/{NewUser,UserContainer,UserDashboard}.jsx`, `pages/{AdminPanel,UserCartelera,UserPanel,UserTickets}.jsx`. Corrección: borrar el `import React` (o `/auditar-frontend`).
 - Los mensajes de error de casi todas las funciones de `src/api` son fijos ("Error al crear la película"). Solo género, función y borrado de película muestran el `detail` del backend. Con `readApiError` se pueden mostrar los mensajes de validación en todos; es un cambio visible, no se hizo.
