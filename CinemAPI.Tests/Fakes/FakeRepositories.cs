@@ -41,6 +41,9 @@ public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepos
     public Task<int> CountByGenreAsync(Guid genreId, CancellationToken ct) =>
         Task.FromResult(Active().Count(m => m.GenreId == genreId));
 
+    public Task<int?> GetDurationIncludingDeletedAsync(Guid movieId, CancellationToken ct) =>
+        Task.FromResult(Stored.Where(m => m.Id == movieId).Select(m => (int?)m.DurationMinutes).FirstOrDefault());
+
     private static Task<IReadOnlyList<Movie>> List(IEnumerable<Movie> movies) =>
         Task.FromResult<IReadOnlyList<Movie>>(movies.ToList());
 }

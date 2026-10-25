@@ -10,5 +10,5 @@ public sealed record CreateShowtimeRequest(
     Guid? ScreenId,
     [Required(ErrorMessage = "El horario es obligatorio.")]
     DateTime? StartTime,
-    [Range(0, 1_000_000, ErrorMessage = "El precio no puede ser negativo.")]
+    [Range(0, 1_000_000, ErrorMessage = "El precio debe estar entre 0 y 1.000.000.")]
     decimal Price);

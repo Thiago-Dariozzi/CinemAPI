@@ -37,7 +37,7 @@ public sealed class ShowtimeService(
         var showtime = request.ToEntity();
         showtime.Id = Guid.NewGuid();
         showtime.IsActive = true;
-        await ValidateNoOverlapAsync(showtime, ct);
+        await ValidateNoOverlapAsync(showtime, previous: null, ct);
 
         showtimeRepository.Add(showtime);
         await unitOfWork.SaveChangesAsync(ct);
@@ -51,7 +51,7 @@ public sealed class ShowtimeService(
         var existing = await GetEntityAsync(id, ct);
         var updated = request.ToEntity(id);
 
-        await ValidateNoOverlapAsync(updated, ct);
+        await ValidateNoOverlapAsync(updated, previous: existing, ct);
 
         existing.MovieId = updated.MovieId;
         existing.ScreenId = updated.ScreenId;
@@ -77,17 +77,30 @@ public sealed class ShowtimeService(
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
     // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea
     // parcialmente (tocarse justo en el borde no cuenta como choque).
-    private async Task ValidateNoOverlapAsync(Showtime showtime, CancellationToken ct)
+    // En una edición solo se validan las referencias que cambian (igual que en Movie y Ticket): una
+    // función de una película ya dada de baja se puede seguir reprogramando.
+    private async Task ValidateNoOverlapAsync(Showtime showtime, Showtime? previous, CancellationToken ct)
     {
-        var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct)
-            ?? throw new InvalidReferenceException("la película", showtime.MovieId);
-        if (!await screenRepository.ExistsAsync(showtime.ScreenId, ct))
+        int durationMinutes;
+        if (showtime.MovieId != previous?.MovieId)
+        {
+            var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct)
+                ?? throw new InvalidReferenceException("la película", showtime.MovieId);
+            durationMinutes = movie.DurationMinutes;
+        }
+        else
+        {
+            durationMinutes = await movieRepository.GetDurationIncludingDeletedAsync(showtime.MovieId, ct)
+                ?? throw new InvalidReferenceException("la película", showtime.MovieId);
+        }
+
+        if (showtime.ScreenId != previous?.ScreenId && !await screenRepository.ExistsAsync(showtime.ScreenId, ct))
         {
             throw new InvalidReferenceException("la sala", showtime.ScreenId);
         }
 
         var newStart = showtime.StartTime;
-        var newEnd = newStart.AddMinutes(movie.DurationMinutes + Showtime.CleaningBufferMinutes);
+        var newEnd = newStart.AddMinutes(durationMinutes + Showtime.CleaningBufferMinutes);
 
         // Candidatas: las que empiezan desde 24 h antes (ninguna película dura un día, así que una
         // función de la noche anterior que cruce la medianoche entra) hasta el fin de la nueva.

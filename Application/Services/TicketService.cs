@@ -28,7 +28,7 @@ public sealed class TicketService(
     public async Task<TicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken ct)
     {
         var ticket = request.ToEntity();
-        await EnsureReferencesExistAsync(ticket, previous: null, ct);
+        await EnsureReferencesExistAsync((ticket.MovieId, ticket.ScreenId, ticket.UserId), previous: null, ct);
 
         ticket.Id = Guid.NewGuid();
         ticket.IsActive = true;
@@ -40,10 +40,14 @@ public sealed class TicketService(
     public async Task UpdateAsync(Guid id, UpdateTicketRequest request, CancellationToken ct)
     {
         var ticket = await GetEntityAsync(id, ct);
-        var previous = (ticket.MovieId, ticket.ScreenId, ticket.UserId);
+
+        // Valida antes de tocar la entidad trackeada.
+        await EnsureReferencesExistAsync(
+            (request.MovieId.GetValueOrDefault(), request.ScreenId.GetValueOrDefault(), request.UserId.GetValueOrDefault()),
+            previous: (ticket.MovieId, ticket.ScreenId, ticket.UserId),
+            ct);
 
         request.ApplyTo(ticket);
-        await EnsureReferencesExistAsync(ticket, previous, ct);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
@@ -60,21 +64,23 @@ public sealed class TicketService(
     // En una edición solo se validan las referencias que cambiaron: un ticket viejo de una
     // película dada de baja se puede seguir editando.
     private async Task EnsureReferencesExistAsync(
-        Ticket ticket, (Guid MovieId, Guid ScreenId, Guid UserId)? previous, CancellationToken ct)
+        (Guid MovieId, Guid ScreenId, Guid UserId) references,
+        (Guid MovieId, Guid ScreenId, Guid UserId)? previous,
+        CancellationToken ct)
     {
-        if (ticket.MovieId != previous?.MovieId && !await movieRepository.ExistsAsync(ticket.MovieId, ct))
+        if (references.MovieId != previous?.MovieId && !await movieRepository.ExistsAsync(references.MovieId, ct))
         {
-            throw new InvalidReferenceException("la película", ticket.MovieId);
+            throw new InvalidReferenceException("la película", references.MovieId);
         }
 
-        if (ticket.ScreenId != previous?.ScreenId && !await screenRepository.ExistsAsync(ticket.ScreenId, ct))
+        if (references.ScreenId != previous?.ScreenId && !await screenRepository.ExistsAsync(references.ScreenId, ct))
         {
-            throw new InvalidReferenceException("la sala", ticket.ScreenId);
+            throw new InvalidReferenceException("la sala", references.ScreenId);
         }
 
-        if (ticket.UserId != previous?.UserId && !await userRepository.ExistsAsync(ticket.UserId, ct))
+        if (references.UserId != previous?.UserId && !await userRepository.ExistsAsync(references.UserId, ct))
         {
-            throw new InvalidReferenceException("el usuario", ticket.UserId);
+            throw new InvalidReferenceException("el usuario", references.UserId);
         }
     }
 

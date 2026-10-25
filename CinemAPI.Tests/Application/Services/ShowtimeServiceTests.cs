@@ -184,6 +184,27 @@ public sealed class ShowtimeServiceTests
         Assert.Equal(0, _unitOfWork.SaveCount);
     }
 
+    // Revisión final: antes respondía 400 aunque no se cambiara la película.
+    [Fact]
+    public async Task Update_WhenItsMovieWasDeleted_CanBeRescheduledWithoutChangingIt()
+    {
+        _movie.IsActive = false;
+
+        await _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(9))), Ct);
+
+        Assert.Equal(Day.AddHours(9), _existing.StartTime);
+    }
+
+    [Fact]
+    public async Task Update_ToADeletedMovie_ThrowsInvalidReferenceException()
+    {
+        var deleted = new Movie { Id = Guid.NewGuid(), Title = "Borrada", DurationMinutes = 90, IsActive = false };
+        _movies.Seed(deleted);
+
+        await Assert.ThrowsAsync<InvalidReferenceException>(
+            () => _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(9)) with { MovieId = deleted.Id }), Ct));
+    }
+
     [Fact]
     public async Task Update_WhenShowtimeDoesNotExist_ThrowsNotFoundException()
     {

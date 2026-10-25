@@ -9,6 +9,8 @@ public class User : IEntity
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
 
-    public string Role { get; set; } = "Client";
+    public const string DefaultRole = "Client";
+
+    public string Role { get; set; } = DefaultRole;
     public bool IsActive { get; set; } = true;
 }

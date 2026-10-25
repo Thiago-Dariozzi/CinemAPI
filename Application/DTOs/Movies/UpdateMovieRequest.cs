@@ -14,6 +14,6 @@ public sealed record UpdateMovieRequest(
     Guid? GenreId,
     string? ImageUrl,
     DateTime ReleaseDate,
-    [Range(0, 1_000_000, ErrorMessage = "El precio sugerido no puede ser negativo.")]
+    [Range(0, 1_000_000, ErrorMessage = "El precio sugerido debe estar entre 0 y 1.000.000.")]
     decimal? SuggestedPrice,
     bool IsShowing = true);

@@ -20,6 +20,12 @@ public sealed class MovieRepository(CinemAPIContext context) : BaseRepository<Mo
     public Task<int> CountByGenreAsync(Guid genreId, CancellationToken ct) =>
         Context.Movies.CountAsync(m => m.GenreId == genreId, ct);
 
+    public Task<int?> GetDurationIncludingDeletedAsync(Guid movieId, CancellationToken ct) =>
+        Context.Movies.IgnoreQueryFilters()
+            .Where(m => m.Id == movieId)
+            .Select(m => (int?)m.DurationMinutes)
+            .FirstOrDefaultAsync(ct);
+
     // Sin ToLower(): la columna usa la collation por defecto de la base (case-insensitive),
     // así que la comparación ya ignora mayúsculas y puede usar índices.
     public async Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
