@@ -78,7 +78,7 @@ Si se tocó el modelo de EF: crear migración con nombre descriptivo (`dotnet ef
 
 Cualquier cambio en rutas, verbos, nombres de campos JSON, códigos de estado o forma de los errores es un **cambio de contrato**:
 - Preguntar antes de hacerlo.
-- Si el repo del front está accesible (`../CinemAPIFront` o agregado con `--add-dir`), leer su `CLAUDE.md` y actualizar `src/api/*.js` en el mismo trabajo.
+- Si el repo del front está accesible (`../CinemAPIFront/cine-frontend` o agregado con `--add-dir`), leer su `CLAUDE.md` y actualizar `src/api/*.js` en el mismo trabajo.
 - Si no está accesible, listar en el reporte exactamente qué debe cambiar en el front.
 
 ## Corrección de violaciones (regla del boy scout)
