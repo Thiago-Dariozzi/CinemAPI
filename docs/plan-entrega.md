@@ -1,6 +1,6 @@
 # Plan de la entrega final — CinemAPI + CinemAPIFront
 
-Entrega: **27/10/2026**. Ramas: `feature/entrega-final` en los dos repos (desde `refactor/buenas-practicas`, que no está mergeada a `main`).
+Entrega: **27/10/2026**. Ramas: `feature/entrega-final` en los dos repos (desde `refactor/buenas-practicas`, que no está mergeada a `main`). Las tareas son **verticales** (§6): cada una deja back y front funcionando juntos.
 
 Consigna: (1) CRUD de las entidades pactadas + casos de uso del cine; (2) autenticación y roles para todos los tipos de usuario; (3) calidad de diseño y de código.
 
@@ -103,7 +103,7 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 | `POST /api/auth/register` | 🌐 | Name, Email, Password (mín. 8). Siempre `Client`. 201 + token |
 | `POST /api/auth/login` | 🌐 | Email, Password → `{ token, expiresAt, user }`. 401 si falla o el usuario está dado de baja |
 | `GET /api/auth/me` | 🔑 | Datos del usuario del token |
-| `PUT /api/auth/me` | 🔑 | Editar nombre y email (409 si el email ya existe) |
+| `PUT /api/auth/me` | 🔑 | Editar el nombre |
 | `PUT /api/auth/password` | 🔑 | CurrentPassword + NewPassword. 400 si la actual no coincide |
 
 ### Usuarios — `UserController` ✎
@@ -112,8 +112,8 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 |---|---|---|
 | `GET /api/user?role=Client\|Admin` | 🛠 | Admin solo puede pedir `Client`; SuperAdmin cualquiera |
 | `GET /api/user/{id}` | 🛠 | Ídem |
-| `POST /api/user` | 👑 | ✎ Solo crea **Admins** (los clientes se registran solos) |
-| `PUT /api/user/{id}` | 👑 | Editar Admins (nombre, email) |
+| `POST /api/user` | 🛠 | ✎ Admin crea clientes; SuperAdmin crea clientes y Admins; nunca SuperAdmins (403) |
+| `PUT /api/user/{id}` | 🛠 | Mismas reglas que el alta (Admin edita clientes; SuperAdmin clientes y Admins) |
 | `DELETE /api/user/{id}` | 🛠 | Admin: solo clientes. SuperAdmin: cualquiera, salvo a sí mismo y salvo el último SuperAdmin activo (403) |
 | ✖ `GET /api/user/email/{email}` | — | Solo lo usaba el login de demo |
 
@@ -122,7 +122,7 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 | Recurso | GET | POST/PUT/DELETE |
 |---|---|---|
 | `Genre`, `Movie`, `Showtime` | 🌐 (`/movie/active`, `/movie/{id}`, `/showtime/movie/{id}`, …) | 🛠 |
-| `GET /api/movie` (todas, incluye fuera de cartelera) | 🛠 | — |
+| `GET /api/movie` (todas, incluye fuera de cartelera) | 🌐 | — |
 | `Screen` ✎ | 🌐 | 🛠 — request con `rows` y `seatsPerRow`; response agrega `rows`, `seatsPerRow` y mantiene `capacity` (calculada) |
 | ✚ `GET /api/showtime/{id}/seats` | 🌐 | Mapa: `rows`, `seatsPerRow`, `price`, butacas ocupadas `[{ row, number }]` |
 | ✚ `GET /api/showtime/upcoming?movieId=` | 🌐 | Funciones futuras activas (para la compra) |
@@ -183,25 +183,35 @@ Se eliminan `/admin/tickets`, `pages/UserTickets.jsx`, `pages/AdminPanel.jsx`, `
 
 Todas las pantallas nuevas con los genéricos (`EntityForm`/`EntityCard`/`EntityGrid`/`useEntityCrud`) salvo el mapa de butacas, que es un componente propio (`SeatMap`) con su hook (`useSeatSelection`).
 
-## 6. Tareas y hallazgos del front asignados
+## 6. Tareas verticales (back + front juntos)
 
-| Tarea | Repo | Contenido | Hallazgos del front (`docs/auditoria-frontend.md`) |
-|---|---|---|---|
-| **1. Modelo** | back | `Roles`, Screen con butacas, Fee Guid, Purchase, Ticket nuevo, migraciones, seeder | — |
-| **2. Auth** | back | JWT, hasher, `AuthController`, políticas en todos los controllers, `ICurrentUser`, `IdentitySeeder`, `LegacyPasswordUpgrader`, `UserController` por rol. Actualizar `CLAUDE.md` (hoy dice "no agregar JWT") | — |
-| **3. Negocio** | back | `PurchaseService` (compra, cancelación, butacas, cargo), `FeeService`, reportes, reglas de borrado de función/sala | — |
-| **4. Auth en el front** | front | `session.js` real, `httpClient` con token y 401, Login/Registro, `ProtectedRoute` por roles, Sidebar por rol, perfil y contraseña, cartelera con `getActiveMovies`, borrar páginas muertas | #15 (D1), #19 (D4), #20 (D3), #22 (Login sin inline), deuda "login de demo" |
-| **5. Pantallas** | front | Compra con `SeatMap`, Mis compras, Ventas, Reportes, Clientes, Administradores, Cargos; Salas con filas × butacas; Movies: `MovieCard` → `EntityCard`, `MovieFunctionsPanel` → `useMovieShowtimes` + `ShowtimeList`/`ShowtimeForm` con salas y películas cargadas una sola vez; fecha de estreno | #7, #8, #9, #10, #14, #18, #28 (Users/Tickets → genéricos: se resuelven al reemplazarlos por Clientes/Administradores/Compras con genéricos), #11 (3 requests por película), #12 (desaparece con Tickets), #13 (`useEntityList` con error), #16 (D2) |
-| **6. Tests** | ambos | Back: tests de `PurchaseService`, `FeeService`, `AuthService` con fakes + integración de autorización (401/403 por rol) y del índice de butacas contra LocalDB. Front: Vitest + Testing Library (D5) para `httpClient`, `fieldValidation`, `EntityForm`, `useEntityCrud`, `SeatMap` | #21 |
-| **7. Cierre** | ambos | Estilos y accesibilidad, README de los dos repos (user-secrets, credenciales de seed, cómo correr), `globalIgnores` de `CinemapiPhone`, revisión final con `revisor-backend` y `revisor-frontend`, actualizar auditorías | #17 (`<main>` anidado), #18 restantes, #23 (comentarios en español: **solo si el profe lo confirma**), #24 (labels), #29, #30 |
+Cada tarea toca los dos repos y termina con los dos funcionando de punta a punta (Definition of Done de cada repo, revisión con `revisor-backend` y `revisor-frontend`, commits en cada repo). Si se corta el tiempo, se entrega lo que esté terminado.
 
-Los tests de cada servicio nuevo del backend se escriben **en la misma tarea** que el servicio (Definition of Done del repo); la Tarea 6 agrega la integración de autorización y todo el front.
+| Tarea | Back | Front | Hallazgos del front | Estado |
+|---|---|---|---|---|
+| **1. Autenticación y roles** | Hash + migración `RenameUserPasswordToPasswordHash` + rehash al arrancar, JWT, `AuthController`, políticas y `[Authorize]` en todos los controllers, `UserService` por rol, SuperAdmin inicial y usuarios demo, OpenAPI Bearer, tests de integración 401/403 | `session.js` real, `httpClient` con token y 401, `ProtectedRoute` por roles, Sidebar por rol, Login/Registro/Mi perfil, Clientes y Administradores, cartelera con `getActiveMovies`, páginas muertas fuera | #15 (D1), #19 (D4), #20 (D3), #22, deuda "login de demo" | ✅ back `87bd41c` · front `d8a2534` |
+| **2. Cargos (Fee)** | `Fee` con Guid + `IsCurrent`, migración `AddFees`, `FeeService`/`FeeController` (SuperAdmin), `GET /api/fee/current` | Pantalla Cargos con genéricos (reemplaza la página pendiente) | — | ⏳ |
+| **3. Salas con butacas y catálogo** | `Screen.Rows`/`SeatsPerRow`, migración `AddScreenSeatLayout`, `GET /api/showtime/{id}/seats`, `/showtime/upcoming` | Salas con filas × butacas; Movies: fecha de estreno, `MovieCard` → `EntityCard`, `MovieFunctionsPanel` → `useMovieShowtimes` + subcomponentes con salas/películas cargadas una vez | #8, #10 (Movies), #11, #13 (`useEntityList` con error), #16 (D2) | ⏳ |
+| **4. Compra de entradas** | `Purchase`, `Ticket` por función + butaca, migración `AddPurchasesAndSeatTickets` (borra los tickets actuales, P1), `PurchaseService` (reglas, cargo, índice único), `POST /api/purchase`, `GET /mine`, cancelación | Detalle de película → funciones → `SeatMap` → confirmar; Mis compras con cancelación. Se borran `Tickets/` y `TicketController` | #7–#10, #12, #14, #18, #28 (Users/Tickets: Tickets desaparece; Clientes/Administradores pasan a genéricos acá) | ⏳ |
+| **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportController` | Ventas y Reportes | — | ⏳ |
+| **6. Tests** | Integración del índice de butacas y de cancelación; casos de autorización de los endpoints nuevos | Vitest + Testing Library (D5): `httpClient`, `session`, `fieldValidation`, `EntityForm`, `useEntityCrud`, `SeatMap` | #21 | ⏳ |
+| **7. Cierre** | README final, revisión de todo el diff | Estilos y accesibilidad, README, `globalIgnores` de `CinemapiPhone` | #17, #18 restantes, #23 (solo si el profe lo confirma), #24, #29, #30 | ⏳ |
+
+Los tests de cada servicio nuevo van **en la misma tarea** que el servicio (Definition of Done del backend), y los casos 401/403 de cada endpoint nuevo se suman a `AuthorizationTests`.
+
+### Decisiones aplicadas en la Tarea 1 (cambian el plan original)
+
+- `GET /api/movie` (todas) y los GET de salas también son públicos (P2: el catálogo completo es público).
+- `PUT /api/auth/me` edita solo el **nombre**: el email identifica la cuenta y viaja en el token.
+- `POST /api/user` lo usa el **staff**: Admin crea clientes; SuperAdmin crea clientes y Admins; nadie crea SuperAdmins por la API. Mismas reglas para editar y dar de baja.
+- Hasta la Tarea 4, los tickets actuales siguen: listado completo solo staff; un cliente solo ve, crea, edita y borra los suyos (el usuario sale del token).
+- Un usuario dado de baja pierde el acceso en el momento (se valida en cada request), aunque su token no haya vencido.
 
 ## 7. Riesgos y recortes
 
 | Riesgo | Mitigación |
 |---|---|
-| **Un solo día** para todo | Orden por valor: 1 → 2 → 3 → 4 → 5 (compra y mis compras primero) → 6 → 7. Commit chico por lote para poder cortar en cualquier punto con todo en verde |
+| **Un solo día** para todo | Tareas verticales en orden (§6): cada una deja los dos repos funcionando, así se puede cortar después de cualquiera y entregar lo que haya |
 | La migración de `Tickets` pierde o rompe datos | Decisión explícita (§8) y prueba contra una copia de la base actual antes de aplicarla |
 | Falta `Jwt:Key` o `SeedSuperAdmin:*` y la API no arranca | Validación al inicio con mensaje claro + README con los comandos de `user-secrets` |
 | Carrera de dos compras de la misma butaca | Índice único filtrado + traducción a 409; test de integración |
@@ -220,13 +230,14 @@ Los tests de cada servicio nuevo del backend se escriben **en la misma tarea** q
 
 No se recorta: auth + roles en todos los endpoints, compra con butacas y cargo, cancelación, CRUD de todas las entidades, migraciones y tests del backend.
 
-## 8. Decisiones pendientes (antes de empezar la Tarea 1)
+## 8. Decisiones tomadas (26/10/2026)
 
-| | Pregunta | Recomendación |
+| | Pregunta | Decisión |
 |---|---|---|
-| P1 | Los tickets actuales no tienen función ni butaca. ¿Se borran en la migración (son datos de Bogus de desarrollo) o se intenta asignarlos a una función de la misma película y sala? | Borrarlos: no hay datos reales, y el seeder genera compras nuevas consistentes |
-| P2 | ¿Cartelera y funciones visibles sin login (GET anónimos) o todo detrás del login? | GET del catálogo anónimos (API) y el front sigue pidiendo login para entrar |
-| P3 | ¿Una compra ajena responde 403 o 404? | 403 (`ForbiddenException`), más claro para corregir |
+| P1 | Tickets actuales sin función ni butaca | Se borran en la migración de la Tarea 4 |
+| P2 | ¿Catálogo sin login? | Sí: los GET de cartelera, películas, funciones, géneros (y salas) son públicos |
+| P3 | ¿Compra ajena 403 o 404? | 403 (`ForbiddenException`) |
+| — | Paquetes | Aprobados los 4; Vitest y Testing Library recién en la Tarea 6 |
 
 ## 9. Paquetes
 

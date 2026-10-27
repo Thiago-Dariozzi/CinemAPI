@@ -24,7 +24,7 @@ Este archivo se carga en cada sesión. Las reglas detalladas viven en `.claude/s
 ## Decisiones tomadas (no cambiar sin pedido explícito)
 
 - Se mantiene el estilo **Services + Repositories + Controllers**. No introducir MediatR, CQRS, AutoMapper, FluentValidation ni otras librerías "de arquitectura": se usan las herramientas que trae .NET (DataAnnotations, `IExceptionHandler`, `ProblemDetails`, mapeo manual).
-- Autenticación: **todavía no se vio en la materia**. No agregar JWT/Identity/hash de contraseñas por iniciativa propia; está registrado como deuda conocida (ver `docs/hallazgos-iniciales.md`).
+- Autenticación: **JWT propio** (`Microsoft.AspNetCore.Authentication.JwtBearer`) + `PasswordHasher<User>` (`Microsoft.Extensions.Identity.Core`). Nada de ASP.NET Identity completo. Roles `SuperAdmin`, `Admin`, `Client` (`Domain/Entities/Roles.cs`).
 - Los Ids son `Guid` generados en el servicio, nunca confiados del cliente.
 - Soft delete con `IsActive` en todas las entidades.
 - Identificadores (clases, métodos, variables, rutas) en **inglés**. Mensajes al usuario en **español**.
@@ -39,7 +39,11 @@ Este archivo se carga en cada sesión. Las reglas detalladas viven en `.claude/s
 - **Tests:** `CinemAPI.Tests/` en carpetas espejo; fakes en memoria en `CinemAPI.Tests/Fakes` (sin librerías de mocking); integración contra **LocalDB** con una base temporal que aplica las migraciones (`SqlServerDatabaseFixture`). Nunca el proveedor InMemory.
 - **Verificación de cambios en la API:** además de los tests, levantar la API contra una base LocalDB aparte y probar los endpoints tocados con `Origin: http://localhost:5173` (estado, content-type, CORS, cuerpo). Los tests unitarios no detectan configuración inválida, consultas no traducibles ni errores de model binding.
 - **Build:** `TreatWarningsAsErrors` está activo, sin excepciones (incluye los avisos de paquetes vulnerables NU190x). `Infrastructure` referencia directamente `System.Security.Cryptography.Pkcs` para forzar la versión parcheada (#47).
-- **Inyección de dependencias:** cada capa registra lo suyo: `Application/DependencyInjection.cs` (`AddApplication()`, servicios; el proyecto solo referencia `Microsoft.Extensions.DependencyInjection.Abstractions`) e `Infrastructure/DependencyInjection.cs` (`AddInfrastructure()`, contexto y repositorios). `DependencyInjectionTests` valida que todo el grafo se resuelva.
+- **Autorización:** políticas `Staff` (Admin + SuperAdmin), `SuperAdminOnly` y `ClientOnly` (`WebApi/Security/Policies.cs`). Cada controller lleva `[Authorize(Policy = ...)]` a nivel de clase y `[AllowAnonymous]` solo en las lecturas públicas del catálogo. Las reglas que dependen del dato (un cliente solo ve lo suyo, un Admin no administra Admins) van en el **servicio**, con `ICurrentUser` (el id y el rol salen del token, nunca del body ni de la ruta) y `ForbiddenException` → 403. `InvalidCredentialsException` → 401, `BusinessRuleException` → 400.
+- **Secretos:** `Jwt:Key`, `SeedSuperAdmin:*` y `DemoUsers:Password` van en `dotnet user-secrets` (ver `README.md`); `AppSettingsTests` falla si aparecen en `appsettings*.json`. La API valida `Jwt` al arrancar.
+- **Arranque:** `DataInitializer` hashea contraseñas viejas en texto plano y crea el SuperAdmin inicial (todos los ambientes); `DbSeeder` (Bogus + usuarios demo) solo en Development.
+- **Tests de autorización:** `CinemAPI.Tests/WebApi/AuthorizationTests.cs` levanta la API con `WebApplicationFactory` (ambiente `Testing`, base LocalDB propia). Todo endpoint nuevo suma sus casos 401/403/permitido ahí.
+- **Inyección de dependencias:** cada capa registra lo suyo: `Application/DependencyInjection.cs` (`AddApplication()`, servicios; el proyecto solo referencia `Microsoft.Extensions.DependencyInjection.Abstractions`) e `Infrastructure/DependencyInjection.cs` (`AddInfrastructure()`, contexto, repositorios y hasher); lo de la request y el JWT en `WebApi/Security` (`AddApiSecurity()`). `DependencyInjectionTests` valida que todo el grafo se resuelva.
 
 ## Regla de dependencias (innegociable)
 
