@@ -18,6 +18,8 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
         var (status, title) = exception switch
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Recurso no encontrado"),
+            InvalidCredentialsException => (StatusCodes.Status401Unauthorized, "No autenticado"),
+            ForbiddenException => (StatusCodes.Status403Forbidden, "Acceso denegado"),
             InvalidReferenceException => (StatusCodes.Status400BadRequest, "Referencia inválida"),
             GenreConflictException or ShowtimeConflictException or UserConflictException or UniqueConstraintConflictException =>
                 (StatusCodes.Status409Conflict, "Conflicto"),

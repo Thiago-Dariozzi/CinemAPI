@@ -1,6 +1,9 @@
+using Application.Interfaces;
 using Bogus;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Data;
 
@@ -9,10 +12,19 @@ public static class DbSeeder
     private static readonly string[] GenreNames =
         { "Acción", "Comedia", "Drama", "Terror", "Ciencia Ficción", "Animación", "Romance", "Suspenso" };
 
-    public static async Task SeedAsync(CinemAPIContext context)
+    public static async Task SeedAsync(
+        CinemAPIContext context, IPasswordHasher hasher, IConfiguration configuration, ILogger logger, CancellationToken ct)
     {
+        // Un hash para todos los usuarios de prueba: calcular PBKDF2 por cada uno hace lento el arranque.
+        var demoPassword = configuration["DemoUsers:Password"];
+        var demoPasswordHash = string.IsNullOrEmpty(demoPassword) ? null : hasher.Hash(demoPassword);
+        if (demoPasswordHash is null)
+        {
+            logger.DemoPasswordMissing();
+        }
+
         // Si ya hay películas cargadas (aunque estén dadas de baja), asumimos que ya se sembró antes.
-        var isFirstSeed = !await context.Movies.IgnoreQueryFilters().AnyAsync();
+        var isFirstSeed = !await context.Movies.IgnoreQueryFilters().AnyAsync(ct);
 
         List<Screen> screens;
         List<Movie> movies;
@@ -49,16 +61,16 @@ public static class DbSeeder
                 .RuleFor(u => u.Id, f => Guid.NewGuid())
                 .RuleFor(u => u.Name, f => f.Name.FullName())
                 .RuleFor(u => u.Email, (f, u) => f.Internet.Email(u.Name))
-                .RuleFor(u => u.Password, f => "Test1234!")
-                .RuleFor(u => u.Role, f => f.PickRandom("Client", "Client", "Client", "Admin")) // ~25% admin
+                .RuleFor(u => u.PasswordHash, f => demoPasswordHash ?? hasher.Hash(Guid.NewGuid().ToString()))
+                .RuleFor(u => u.Role, f => Roles.Client)
                 .RuleFor(u => u.IsActive, f => true);
             var users = userFaker.Generate(30);
 
-            await context.Genres.AddRangeAsync(genres);
-            await context.Screens.AddRangeAsync(screens);
-            await context.Movies.AddRangeAsync(movies);
-            await context.Users.AddRangeAsync(users);
-            await context.SaveChangesAsync();
+            await context.Genres.AddRangeAsync(genres, ct);
+            await context.Screens.AddRangeAsync(screens, ct);
+            await context.Movies.AddRangeAsync(movies, ct);
+            await context.Users.AddRangeAsync(users, ct);
+            await context.SaveChangesAsync(ct);
 
             // --- Tickets (dependen de los IDs ya generados arriba) ---
             var ticketFaker = new Faker<Ticket>("es")
@@ -71,22 +83,42 @@ public static class DbSeeder
                 .RuleFor(t => t.IsActive, f => true);
             var tickets = ticketFaker.Generate(50);
 
-            await context.Tickets.AddRangeAsync(tickets);
-            await context.SaveChangesAsync();
+            await context.Tickets.AddRangeAsync(tickets, ct);
+            await context.SaveChangesAsync(ct);
         }
         else
         {
-            screens = await context.Screens.ToListAsync();
-            movies = await context.Movies.ToListAsync();
+            screens = await context.Screens.ToListAsync(ct);
+            movies = await context.Movies.ToListAsync(ct);
+        }
+
+        if (demoPasswordHash is not null)
+        {
+            await EnsureDemoUserAsync(context, "admin@cinemapi.com", "Admin Demo", Roles.Admin, demoPasswordHash, ct);
+            await EnsureDemoUserAsync(context, "cliente@cinemapi.com", "Cliente Demo", Roles.Client, demoPasswordHash, ct);
         }
 
         // --- Showtimes (funciones) ---
-        if (!await context.Showtimes.IgnoreQueryFilters().AnyAsync() && movies.Count > 0 && screens.Count > 0)
+        if (!await context.Showtimes.IgnoreQueryFilters().AnyAsync(ct) && movies.Count > 0 && screens.Count > 0)
         {
             var showtimes = GenerateShowtimes(movies, screens);
-            await context.Showtimes.AddRangeAsync(showtimes);
-            await context.SaveChangesAsync();
+            await context.Showtimes.AddRangeAsync(showtimes, ct);
+            await context.SaveChangesAsync(ct);
         }
+    }
+
+    // Un usuario demo por rol de staff y uno cliente (el SuperAdmin sale de SeedSuperAdmin). Si ya existe
+    // no se toca, así una contraseña cambiada a mano no se pisa en cada arranque.
+    private static async Task EnsureDemoUserAsync(
+        CinemAPIContext context, string email, string name, string role, string passwordHash, CancellationToken ct)
+    {
+        if (await context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email, ct))
+        {
+            return;
+        }
+
+        context.Users.Add(new User { Id = Guid.NewGuid(), Name = name, Email = email, Role = role, PasswordHash = passwordHash, IsActive = true });
+        await context.SaveChangesAsync(ct);
     }
 
     // 3 funciones por película en salas y horarios al azar, descartando las que se superpondrían

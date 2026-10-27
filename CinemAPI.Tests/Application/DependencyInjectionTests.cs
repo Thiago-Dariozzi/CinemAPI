@@ -1,5 +1,6 @@
 using Application;
 using Application.Interfaces;
+using CinemAPI.Tests.Fakes;
 using Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,10 +33,15 @@ public sealed class DependencyInjectionTests
             })
             .Build();
         var services = new ServiceCollection().AddApplication().AddInfrastructure(configuration);
+        // Los provee WebApi (dependen de la request y del esquema JWT); el grafo completo de la API
+        // lo cubren los tests de integración de autorización.
+        services.AddScoped<ICurrentUser, FakeCurrentUser>();
+        services.AddSingleton<ITokenGenerator, FakeTokenGenerator>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         using var scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IShowtimeService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IAuthService>());
     }
 }

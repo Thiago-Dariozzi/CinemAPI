@@ -12,22 +12,33 @@ public sealed class TicketService(
     IMovieRepository movieRepository,
     IScreenRepository screenRepository,
     IUserRepository userRepository,
+    ICurrentUser currentUser,
     IUnitOfWork unitOfWork) : ITicketService
 {
     private const string EntityName = "el ticket";
 
+    private bool IsStaff => Roles.IsStaff(currentUser.Role);
+
     public async Task<IReadOnlyList<TicketResponse>> GetAllAsync(CancellationToken ct) =>
         ToResponses(await ticketRepository.GetAllAsync(ct));
 
-    public async Task<TicketResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
-        (await GetEntityAsync(id, ct)).ToResponse();
+    public async Task<TicketResponse> GetByIdAsync(Guid id, CancellationToken ct)
+    {
+        var ticket = await GetEntityAsync(id, ct);
+        EnsureCanAccess(ticket.UserId);
+        return ticket.ToResponse();
+    }
 
-    public async Task<IReadOnlyList<TicketResponse>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
-        ToResponses(await ticketRepository.GetByUserIdAsync(userId, ct));
+    public async Task<IReadOnlyList<TicketResponse>> GetByUserIdAsync(Guid userId, CancellationToken ct)
+    {
+        EnsureCanAccess(userId);
+        return ToResponses(await ticketRepository.GetByUserIdAsync(userId, ct));
+    }
 
+    // Un cliente siempre compra para sí mismo: el UserId del body se reemplaza por el del token.
     public async Task<TicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken ct)
     {
-        var ticket = request.ToEntity();
+        var ticket = (IsStaff ? request : request with { UserId = currentUser.Id }).ToEntity();
         await EnsureReferencesExistAsync((ticket.MovieId, ticket.ScreenId, ticket.UserId), previous: null, ct);
 
         ticket.Id = Guid.NewGuid();
@@ -40,6 +51,11 @@ public sealed class TicketService(
     public async Task UpdateAsync(Guid id, UpdateTicketRequest request, CancellationToken ct)
     {
         var ticket = await GetEntityAsync(id, ct);
+        EnsureCanAccess(ticket.UserId);
+        if (!IsStaff)
+        {
+            request = request with { UserId = currentUser.Id };
+        }
 
         // Valida antes de tocar la entidad trackeada.
         await EnsureReferencesExistAsync(
@@ -54,8 +70,17 @@ public sealed class TicketService(
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var ticket = await GetEntityAsync(id, ct);
+        EnsureCanAccess(ticket.UserId);
         ticket.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    private void EnsureCanAccess(Guid ownerId)
+    {
+        if (!IsStaff && ownerId != currentUser.Id)
+        {
+            throw new ForbiddenException("Solo podés ver y modificar tus propios tickets.");
+        }
     }
 
     private async Task<Ticket> GetEntityAsync(Guid id, CancellationToken ct) =>

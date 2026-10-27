@@ -16,6 +16,20 @@ public sealed class AppSettingsTests
         Assert.NotEqual(0, root.GetProperty("Cors").GetProperty("AllowedOrigins").GetArrayLength());
     }
 
+    // Los secretos van en user-secrets (desarrollo) o variables de entorno, nunca en el repo.
+    [Fact]
+    public void AppSettings_DoesNotContainSecrets()
+    {
+        var root = FindRepositoryRoot();
+        foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
+        {
+            var content = File.ReadAllText(Path.Combine(root, "WebApi", file));
+
+            Assert.DoesNotContain("\"Key\"", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("Password", content, StringComparison.Ordinal);
+        }
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

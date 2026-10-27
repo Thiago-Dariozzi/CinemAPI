@@ -8,11 +8,11 @@ namespace CinemAPI.Tests.Infrastructure;
 // también verifica que se puedan aplicar desde cero. Se borra al terminar.
 public sealed class SqlServerDatabaseFixture : IAsyncLifetime
 {
-    private readonly string _connectionString =
+    public string ConnectionString { get; } =
         $@"Server=(localdb)\MSSQLLocalDB;Database=CinemAPI_Tests_{Guid.NewGuid():N};Trusted_Connection=True;TrustServerCertificate=True;";
 
     public CinemAPIContext CreateContext() =>
-        new(new DbContextOptionsBuilder<CinemAPIContext>().UseSqlServer(_connectionString).Options);
+        new(new DbContextOptionsBuilder<CinemAPIContext>().UseSqlServer(ConnectionString).Options);
 
     public async Task InitializeAsync()
     {

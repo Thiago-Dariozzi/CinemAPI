@@ -52,7 +52,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
     [Fact]
     public async Task UserRepository_EmailExists_CountsDeletedUsers_AndCanExcludeOne()
     {
-        var deleted = new User { Id = Guid.NewGuid(), Name = "Baja", Email = $"baja.{Guid.NewGuid():N}@cine.com", Password = "x", IsActive = false };
+        var deleted = new User { Id = Guid.NewGuid(), Name = "Baja", Email = $"baja.{Guid.NewGuid():N}@cine.com", PasswordHash = "x", IsActive = false };
         await SaveAsync(deleted);
 
         await using var context = database.CreateContext();
@@ -157,7 +157,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
     [Fact]
     public async Task UserRepository_GetByEmail_IgnoresCase()
     {
-        var user = new User { Id = Guid.NewGuid(), Name = "Ana", Email = $"ana.{Guid.NewGuid():N}@cine.com", Password = "x" };
+        var user = new User { Id = Guid.NewGuid(), Name = "Ana", Email = $"ana.{Guid.NewGuid():N}@cine.com", PasswordHash = "x" };
         await SaveAsync(user);
 
         await using var context = database.CreateContext();

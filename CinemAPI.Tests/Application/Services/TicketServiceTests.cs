@@ -15,18 +15,19 @@ public sealed class TicketServiceTests
     private readonly FakeScreenRepository _screens = new();
     private readonly FakeUserRepository _users = new();
     private readonly FakeUnitOfWork _unitOfWork = new();
+    private readonly FakeCurrentUser _currentUser = new() { Role = Roles.Admin };
     private readonly TicketService _sut;
 
     private readonly Movie _movie = new() { Id = Guid.NewGuid(), Title = "Película", DurationMinutes = 100 };
     private readonly Screen _screen = new() { Id = Guid.NewGuid(), Name = "Sala 1", Capacity = 100 };
-    private readonly User _user = new() { Id = Guid.NewGuid(), Name = "Ana", Email = "ana@cine.com", Password = "x" };
+    private readonly User _user = new() { Id = Guid.NewGuid(), Name = "Ana", Email = "ana@cine.com", PasswordHash = "x" };
 
     public TicketServiceTests()
     {
         _movies.Seed(_movie);
         _screens.Seed(_screen);
         _users.Seed(_user);
-        _sut = new TicketService(_tickets, _movies, _screens, _users, _unitOfWork);
+        _sut = new TicketService(_tickets, _movies, _screens, _users, _currentUser, _unitOfWork);
     }
 
     [Fact]
@@ -66,6 +67,36 @@ public sealed class TicketServiceTests
         await _sut.UpdateAsync(created.Id, new UpdateTicketRequest(r.MovieId, r.ScreenId, r.UserId, r.BuyDate, 99m), Ct);
 
         Assert.Equal(99m, Assert.Single(_tickets.Stored).FinalPrice);
+    }
+
+    // Un cliente no puede comprar a nombre de otro: el usuario sale del token, no del body.
+    [Fact]
+    public async Task Create_AsClient_IgnoresTheUserIdOfTheBody()
+    {
+        _currentUser.As(_user);
+
+        var created = await _sut.CreateAsync(NewRequest() with { UserId = Guid.NewGuid() }, Ct);
+
+        Assert.Equal(_user.Id, created.UserId);
+    }
+
+    [Fact]
+    public async Task GetByUserId_AsClient_ForAnotherUser_ThrowsForbiddenException()
+    {
+        _currentUser.As(_user);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.GetByUserIdAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task Delete_AsClient_SomeoneElsesTicket_ThrowsForbiddenException()
+    {
+        var created = await _sut.CreateAsync(NewRequest(), Ct);
+        _currentUser.Id = Guid.NewGuid();
+        _currentUser.Role = Roles.Client;
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.DeleteAsync(created.Id, Ct));
+        Assert.True(Assert.Single(_tickets.Stored).IsActive);
     }
 
     private CreateTicketRequest NewRequest() =>

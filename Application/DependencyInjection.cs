@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
         services.AddScoped<IShowtimeService, ShowtimeService>();
         services.AddScoped<IGenreService, GenreService>();
+        services.AddScoped<IAuthService, AuthService>();
 
         return services;
     }

@@ -12,21 +12,25 @@ public sealed class UserServiceTests
 
     private readonly FakeUserRepository _users = new();
     private readonly FakeUnitOfWork _unitOfWork = new();
+    private readonly FakeCurrentUser _currentUser = new();
     private readonly UserService _sut;
 
-    private readonly User _ana = new() { Id = Guid.NewGuid(), Name = "Ana", Email = "ana@cine.com", Password = "secreta", Role = "Client" };
+    private readonly User _superAdmin = NewUser("Sara", Roles.SuperAdmin);
+    private readonly User _admin = NewUser("Alan", Roles.Admin);
+    private readonly User _ana = NewUser("Ana", Roles.Client);
 
     public UserServiceTests()
     {
-        _users.Seed(_ana);
-        _sut = new UserService(_users, _unitOfWork);
+        _users.Seed(_superAdmin, _admin, _ana);
+        _currentUser.As(_admin);
+        _sut = new UserService(_users, new FakePasswordHasher(), _currentUser, _unitOfWork);
     }
 
     [Fact]
     public async Task Create_WhenEmailAlreadyExists_ThrowsUserConflictException()
     {
         var ex = await Assert.ThrowsAsync<UserConflictException>(
-            () => _sut.CreateAsync(new CreateUserRequest("Otra Ana", "ANA@cine.com", "y", null), Ct));
+            () => _sut.CreateAsync(new CreateUserRequest("Otra Ana", "ANA@cine.com", "12345678", null), Ct));
 
         Assert.Equal("Ya existe un usuario con ese email.", ex.Message);
         Assert.Equal(0, _unitOfWork.SaveCount);
@@ -39,44 +43,146 @@ public sealed class UserServiceTests
         _ana.IsActive = false;
 
         await Assert.ThrowsAsync<UserConflictException>(
-            () => _sut.CreateAsync(new CreateUserRequest("Nueva", "ana@cine.com", "y", null), Ct));
+            () => _sut.CreateAsync(new CreateUserRequest("Nueva", "ana@cine.com", "12345678", null), Ct));
+    }
+
+    [Fact]
+    public async Task Create_HashesThePasswordAndDefaultsRoleToClient()
+    {
+        var created = await _sut.CreateAsync(new CreateUserRequest("Beto", "beto@cine.com", "12345678", null), Ct);
+
+        var stored = Assert.Single(_users.Stored, u => u.Id == created.Id);
+        Assert.Equal("hash:12345678", stored.PasswordHash);
+        Assert.Equal(Roles.Client, created.Role);
+        Assert.True(created.IsActive);
+    }
+
+    [Theory]
+    [InlineData(Roles.Admin)]
+    [InlineData(Roles.SuperAdmin)]
+    public async Task Create_AsAdmin_WithAStaffRole_ThrowsForbiddenException(string role)
+    {
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => _sut.CreateAsync(new CreateUserRequest("Nuevo", "nuevo@cine.com", "12345678", role), Ct));
+        Assert.Equal(0, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Create_AsSuperAdmin_CanCreateAdmins_ButNotSuperAdmins()
+    {
+        _currentUser.As(_superAdmin);
+
+        var admin = await _sut.CreateAsync(new CreateUserRequest("Nuevo", "nuevo@cine.com", "12345678", Roles.Admin), Ct);
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(
+            () => _sut.CreateAsync(new CreateUserRequest("Otro", "otro@cine.com", "12345678", Roles.SuperAdmin), Ct));
+
+        Assert.Equal(Roles.Admin, admin.Role);
+        Assert.Equal("No se pueden crear SuperAdmins desde la API.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Create_WithAnUnknownRole_ThrowsBusinessRuleException()
+    {
+        _currentUser.As(_superAdmin);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(
+            () => _sut.CreateAsync(new CreateUserRequest("Nuevo", "nuevo@cine.com", "12345678", "Root"), Ct));
+    }
+
+    [Fact]
+    public async Task GetAll_AsAdmin_OnlyReturnsClients()
+    {
+        var users = await _sut.GetAllAsync(role: null, Ct);
+
+        Assert.Equal([_ana.Id], users.Select(u => u.Id));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.GetAllAsync(Roles.Admin, Ct));
+    }
+
+    [Fact]
+    public async Task GetById_AsAdmin_AnotherAdmin_ThrowsForbiddenException()
+    {
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.GetByIdAsync(_superAdmin.Id, Ct));
     }
 
     [Fact]
     public async Task Update_ToAnotherUsersEmail_ThrowsUserConflictException()
     {
-        var beto = new User { Id = Guid.NewGuid(), Name = "Beto", Email = "beto@cine.com", Password = "z" };
+        var beto = NewUser("Beto", Roles.Client);
         _users.Seed(beto);
 
         await Assert.ThrowsAsync<UserConflictException>(
-            () => _sut.UpdateAsync(beto.Id, new UpdateUserRequest("Beto", "ana@cine.com", null), Ct));
-    }
-
-    [Fact]
-    public async Task Create_GeneratesIdActivatesAndDefaultsRoleToClient()
-    {
-        var created = await _sut.CreateAsync(new CreateUserRequest("Beto", "beto@cine.com", "z", null), Ct);
-
-        Assert.NotEqual(Guid.Empty, created.Id);
-        Assert.True(created.IsActive);
-        Assert.Equal("Client", created.Role);
-        Assert.Equal(1, _unitOfWork.SaveCount);
+            () => _sut.UpdateAsync(beto.Id, new UpdateUserRequest("Beto", _ana.Email, null), Ct));
     }
 
     // Antes el PUT recibía la entidad entera y pisaba la contraseña (#1 y #6 de la auditoría).
     [Fact]
-    public async Task Update_ChangesProfileButKeepsPasswordAndActiveState()
+    public async Task Update_ChangesProfileButKeepsPasswordRoleAndActiveState()
     {
-        await _sut.UpdateAsync(_ana.Id, new UpdateUserRequest("Ana María", "anam@cine.com", "Admin"), Ct);
+        await _sut.UpdateAsync(_ana.Id, new UpdateUserRequest("Ana María", "anam@cine.com", null), Ct);
 
-        Assert.Equal(("Ana María", "anam@cine.com", "Admin"), (_ana.Name, _ana.Email, _ana.Role));
-        Assert.Equal("secreta", _ana.Password);
+        Assert.Equal(("Ana María", "anam@cine.com", Roles.Client), (_ana.Name, _ana.Email, _ana.Role));
+        Assert.Equal("hash:secreta", _ana.PasswordHash);
         Assert.True(_ana.IsActive);
     }
 
     [Fact]
-    public async Task GetByEmail_WhenNotFound_ThrowsNotFoundException()
+    public async Task Update_AsAdmin_PromotingAClientToAdmin_ThrowsForbiddenException()
     {
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetByEmailAsync("nadie@cine.com", Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => _sut.UpdateAsync(_ana.Id, new UpdateUserRequest("Ana", _ana.Email, Roles.Admin), Ct));
+        Assert.Equal(Roles.Client, _ana.Role);
     }
+
+    [Fact]
+    public async Task Delete_AsAdmin_ADifferentAdmin_ThrowsForbiddenException()
+    {
+        var otherAdmin = NewUser("Otro", Roles.Admin);
+        _users.Seed(otherAdmin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.DeleteAsync(otherAdmin.Id, Ct));
+        Assert.True(otherAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task Delete_Themselves_ThrowsForbiddenException()
+    {
+        _currentUser.As(_superAdmin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.DeleteAsync(_superAdmin.Id, Ct));
+        Assert.True(_superAdmin.IsActive);
+    }
+
+    // Defensa en profundidad: aunque hoy no se pueda borrar a uno mismo, nunca debe quedar el sistema
+    // sin SuperAdmin (por ejemplo, si el que borra fue dado de baja después de loguearse).
+    [Fact]
+    public async Task Delete_TheLastActiveSuperAdmin_ThrowsForbiddenException()
+    {
+        var formerSuperAdmin = NewUser("Ex", Roles.SuperAdmin);
+        formerSuperAdmin.IsActive = false;
+        _users.Seed(formerSuperAdmin);
+        _currentUser.As(formerSuperAdmin);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => _sut.DeleteAsync(_superAdmin.Id, Ct));
+
+        Assert.Equal("No se puede dar de baja al último SuperAdmin activo.", ex.Message);
+        Assert.True(_superAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task Delete_AsAdmin_AClient_SoftDeletes()
+    {
+        await _sut.DeleteAsync(_ana.Id, Ct);
+
+        Assert.False(_ana.IsActive);
+        Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    private static User NewUser(string name, string role) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        Email = $"{name.ToLowerInvariant()}@cine.com",
+        PasswordHash = "hash:secreta",
+        Role = role,
+    };
 }

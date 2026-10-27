@@ -1,6 +1,7 @@
 using Application.Interfaces;
 using Domain.Interfaces;
 using Infrastructure.Repositories;
+using Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ public static class DependencyInjection
 
         services.AddDbContext<CinemAPIContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<CinemAPIContext>());
+        services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IMovieRepository, MovieRepository>();

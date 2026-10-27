@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Application.DTOs.Users;
 
-// Sin Password: la contraseña no se cambia desde la edición del usuario (ver deuda de autenticación).
+// Sin Password: cada usuario cambia la suya con PUT /api/auth/password. Role vacío = no cambia.
 public sealed record UpdateUserRequest(
     [Required(ErrorMessage = "El nombre es obligatorio.")]
     [StringLength(100, ErrorMessage = "El nombre no puede superar los 100 caracteres.")]

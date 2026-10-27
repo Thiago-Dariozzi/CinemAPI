@@ -1,33 +1,41 @@
 using Application.DTOs.Movies;
 using Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using WebApi.Security;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = Policies.Staff)]
 public sealed class MovieController(IMovieService movieService) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet("active")]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetShowingMovies(CancellationToken ct) =>
         Ok(await movieService.GetShowingMoviesAsync(ct));
 
+    [AllowAnonymous]
     [HttpGet("genre/{genreId:guid}")]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByGenre(Guid genreId, CancellationToken ct) =>
         Ok(await movieService.GetByGenreAsync(genreId, ct));
 
+    [AllowAnonymous]
     [HttpGet("title/{title}")]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByTitle(string title, CancellationToken ct) =>
         Ok(await movieService.GetByTitleAsync(title, ct));
 
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetAll(CancellationToken ct) =>
         Ok(await movieService.GetAllAsync(ct));
 
+    [AllowAnonymous]
     [HttpGet("{id:guid}")]
     [ProducesResponseType<MovieResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -37,6 +45,8 @@ public sealed class MovieController(IMovieService movieService) : ControllerBase
     [HttpPost]
     [ProducesResponseType<MovieResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<MovieResponse>> Add(CreateMovieRequest request, CancellationToken ct)
     {
         var created = await movieService.CreateAsync(request, ct);
@@ -46,6 +56,8 @@ public sealed class MovieController(IMovieService movieService) : ControllerBase
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         await movieService.DeleteAsync(id, ct);
@@ -56,6 +68,8 @@ public sealed class MovieController(IMovieService movieService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Update(Guid id, UpdateMovieRequest request, CancellationToken ct)
     {
         await movieService.UpdateAsync(id, request, ct);

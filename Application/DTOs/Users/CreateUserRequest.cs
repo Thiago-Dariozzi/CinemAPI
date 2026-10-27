@@ -11,6 +11,7 @@ public sealed record CreateUserRequest(
     [StringLength(150, ErrorMessage = "El email no puede superar los 150 caracteres.")]
     string Email,
     [Required(ErrorMessage = "La contraseña es obligatoria.")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "La contraseña debe tener entre 8 y 100 caracteres.")]
     string Password,
     [StringLength(30, ErrorMessage = "El rol no puede superar los 30 caracteres.")]
     string? Role);

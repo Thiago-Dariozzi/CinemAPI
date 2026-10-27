@@ -14,6 +14,9 @@ public sealed class GlobalExceptionHandlerTests
     [InlineData(typeof(ShowtimeConflictException), 409, "Conflicto")]
     [InlineData(typeof(UserConflictException), 409, "Conflicto")]
     [InlineData(typeof(UniqueConstraintConflictException), 409, "Conflicto")]
+    [InlineData(typeof(InvalidCredentialsException), 401, "No autenticado")]
+    [InlineData(typeof(ForbiddenException), 403, "Acceso denegado")]
+    [InlineData(typeof(BusinessRuleException), 400, "Regla de negocio no cumplida")]
     public async Task DomainExceptions_AreWrittenAsProblemDetailsWithMessageInDetail(Type exceptionType, int status, string title)
     {
         var exception = exceptionType == typeof(NotFoundException) ? new NotFoundException("el género", Guid.Empty)
