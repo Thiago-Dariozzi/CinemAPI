@@ -18,8 +18,18 @@ public sealed class FakeUserRepository : InMemoryRepository<User>, IUserReposito
     public Task<bool> EmailExistsAsync(string email, Guid? excludeId, CancellationToken ct) =>
         Task.FromResult(Stored.Any(u => SameEmail(u.Email, email) && u.Id != excludeId));
 
-    public Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<User>>(Active().Where(u => roles.Contains(u.Role)).OrderBy(u => u.Name).ToList());
+    // Como el repositorio real: incluye a los dados de baja y busca sin distinguir mayúsculas.
+    public Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, string? search, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<User>>(Stored
+            .Where(u => roles.Contains(u.Role))
+            .Where(u => search is null
+                || u.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || u.Email.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(u => u.Name)
+            .ToList());
+
+    public Task<User?> GetByIdIncludingInactiveAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult(Stored.FirstOrDefault(u => u.Id == id));
 
     public Task<int> CountByRoleAsync(string role, CancellationToken ct) =>
         Task.FromResult(Active().Count(u => u.Role == role));
@@ -123,6 +133,8 @@ public sealed class FakeTicketRepository(FakePurchaseRepository purchases, FakeS
 public sealed class FakeFeeRepository : InMemoryRepository<Fee>, IFeeRepository
 {
     public Task<Fee?> GetCurrentAsync(CancellationToken ct) => Task.FromResult(Active().FirstOrDefault(f => f.IsCurrent));
+
+    public Task<Fee?> GetCurrentForUpdateAsync(CancellationToken ct) => GetCurrentAsync(ct);
 }
 
 // Arma los detalles con los datos de los otros fakes, incluidos los dados de baja (como el join real).

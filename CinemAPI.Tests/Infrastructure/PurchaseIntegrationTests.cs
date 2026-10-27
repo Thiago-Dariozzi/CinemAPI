@@ -151,5 +151,8 @@ public sealed class PurchaseIntegrationTests(SqlServerDatabaseFixture database)
             await concurrentRequest();
             return await inner.SaveChangesAsync(cancellationToken);
         }
+
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken) =>
+            inner.ExecuteInTransactionAsync(work, cancellationToken);
     }
 }

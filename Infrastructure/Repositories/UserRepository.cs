@@ -14,8 +14,18 @@ public sealed class UserRepository(CinemAPIContext context) : BaseRepository<Use
     public Task<bool> EmailExistsAsync(string email, Guid? excludeId, CancellationToken ct) =>
         Context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email && u.Id != excludeId, ct);
 
-    public async Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, CancellationToken ct) =>
-        await Context.Users.AsNoTracking().Where(u => roles.Contains(u.Role)).OrderBy(u => u.Name).ToListAsync(ct);
+    // IgnoreQueryFilters a propósito: el staff ve a los dados de baja para poder reactivarlos.
+    // Contains se traduce a LIKE, que con la collation de la base no distingue mayúsculas.
+    public async Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, string? search, CancellationToken ct) =>
+        await Context.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => roles.Contains(u.Role))
+            .Where(u => search == null || u.Name.Contains(search) || u.Email.Contains(search))
+            .OrderBy(u => u.Name)
+            .ToListAsync(ct);
+
+    // IgnoreQueryFilters a propósito: reactivar es justamente buscar a un usuario dado de baja.
+    public Task<User?> GetByIdIncludingInactiveAsync(Guid id, CancellationToken ct) =>
+        Context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == id, ct);
 
     public Task<int> CountByRoleAsync(string role, CancellationToken ct) =>
         Context.Users.CountAsync(u => u.Role == role, ct);

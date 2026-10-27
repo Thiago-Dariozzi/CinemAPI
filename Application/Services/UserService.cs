@@ -17,7 +17,8 @@ public sealed class UserService(
 {
     private const string EntityName = "el usuario";
 
-    public async Task<IReadOnlyList<UserResponse>> GetAllAsync(string? role, CancellationToken ct)
+    // Incluye a los dados de baja (IsActive = false) para que se puedan reactivar.
+    public async Task<IReadOnlyList<UserResponse>> GetAllAsync(string? role, string? search, CancellationToken ct)
     {
         var visible = UserRules.VisibleRoles(currentUser.Role);
         if (role is not null)
@@ -29,7 +30,8 @@ public sealed class UserService(
             }
         }
 
-        var users = await userRepository.GetByRolesAsync(role is null ? visible : [role], ct);
+        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var users = await userRepository.GetByRolesAsync(role is null ? visible : [role], term, ct);
         return users.Select(u => u.ToResponse()).ToList();
     }
 
@@ -92,7 +94,8 @@ public sealed class UserService(
 
         if (user.Role == Roles.SuperAdmin)
         {
-            await EnsureCanDeleteSuperAdminAsync(ct);
+            EnsureActorIsSuperAdmin("Solo un SuperAdmin puede dar de baja a otro SuperAdmin.");
+            await EnsureNotTheLastSuperAdminAsync(ct);
         }
         else
         {
@@ -103,13 +106,38 @@ public sealed class UserService(
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    private async Task EnsureCanDeleteSuperAdminAsync(CancellationToken ct)
+    // Las mismas reglas que la baja: Admin reactiva clientes; SuperAdmin, cualquiera.
+    public async Task ReactivateAsync(Guid id, CancellationToken ct)
+    {
+        var user = await userRepository.GetByIdIncludingInactiveAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+        if (user.Role == Roles.SuperAdmin)
+        {
+            EnsureActorIsSuperAdmin("Solo un SuperAdmin puede reactivar a otro SuperAdmin.");
+        }
+        else
+        {
+            EnsureCanManage(user);
+        }
+
+        if (user.IsActive)
+        {
+            throw new UserConflictException("El usuario ya está activo.");
+        }
+
+        user.IsActive = true;
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    private void EnsureActorIsSuperAdmin(string message)
     {
         if (currentUser.Role != Roles.SuperAdmin)
         {
-            throw new ForbiddenException("Solo un SuperAdmin puede dar de baja a otro SuperAdmin.");
+            throw new ForbiddenException(message);
         }
+    }
 
+    private async Task EnsureNotTheLastSuperAdminAsync(CancellationToken ct)
+    {
         if (await userRepository.CountByRoleAsync(Roles.SuperAdmin, ct) <= 1)
         {
             throw new ForbiddenException("No se puede dar de baja al último SuperAdmin activo.");

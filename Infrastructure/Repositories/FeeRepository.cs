@@ -8,4 +8,7 @@ public sealed class FeeRepository(CinemAPIContext context) : BaseRepository<Fee>
 {
     public Task<Fee?> GetCurrentAsync(CancellationToken ct) =>
         Context.Fees.AsNoTracking().FirstOrDefaultAsync(f => f.IsCurrent, ct);
+
+    public Task<Fee?> GetCurrentForUpdateAsync(CancellationToken ct) =>
+        Context.Fees.FirstOrDefaultAsync(f => f.IsCurrent, ct);
 }

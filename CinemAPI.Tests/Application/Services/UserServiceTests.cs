@@ -92,10 +92,151 @@ public sealed class UserServiceTests
     [Fact]
     public async Task GetAll_AsAdmin_OnlyReturnsClients()
     {
-        var users = await _sut.GetAllAsync(role: null, Ct);
+        var users = await _sut.GetAllAsync(role: null, search: null, Ct);
 
         Assert.Equal([_ana.Id], users.Select(u => u.Id));
-        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.GetAllAsync(Roles.Admin, Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.GetAllAsync(Roles.Admin, search: null, Ct));
+    }
+
+    [Fact]
+    public async Task GetAll_IncludesDeletedUsers_SoTheyCanBeReactivated()
+    {
+        var deleted = NewUser("Beto", Roles.Client);
+        deleted.IsActive = false;
+        _users.Seed(deleted);
+
+        var users = await _sut.GetAllAsync(Roles.Client, search: null, Ct);
+
+        Assert.Equal([(_ana.Id, true), (deleted.Id, false)], users.Select(u => (u.Id, u.IsActive)));
+    }
+
+    [Theory]
+    [InlineData("an", "Ana")]      // parte del nombre, sin distinguir mayúsculas
+    [InlineData("BETO@", "Beto")]  // parte del email
+    [InlineData("  ana  ", "Ana")] // se ignoran los espacios de los costados
+    public async Task GetAll_SearchesByNameOrEmail(string search, string expected)
+    {
+        _users.Seed(NewUser("Beto", Roles.Client));
+
+        var users = await _sut.GetAllAsync(Roles.Client, search, Ct);
+
+        Assert.Equal([expected], users.Select(u => u.Name));
+    }
+
+    [Fact]
+    public async Task GetAll_WithABlankSearch_ReturnsEveryone()
+    {
+        _users.Seed(NewUser("Beto", Roles.Client));
+
+        Assert.Equal(2, (await _sut.GetAllAsync(Roles.Client, "   ", Ct)).Count);
+    }
+
+    [Fact]
+    public async Task Reactivate_AsAdmin_AClient_TurnsItActiveAgain()
+    {
+        _ana.IsActive = false;
+
+        await _sut.ReactivateAsync(_ana.Id, Ct);
+
+        Assert.True(_ana.IsActive);
+        Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Reactivate_AsAdmin_AnAdmin_ThrowsForbiddenException()
+    {
+        var otherAdmin = NewUser("Otro", Roles.Admin);
+        otherAdmin.IsActive = false;
+        _users.Seed(otherAdmin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.ReactivateAsync(otherAdmin.Id, Ct));
+        Assert.False(otherAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task Reactivate_AsSuperAdmin_AnAdminOrASuperAdmin_Works()
+    {
+        _currentUser.As(_superAdmin);
+        var formerAdmin = NewUser("Otro", Roles.Admin);
+        var formerSuperAdmin = NewUser("Ex", Roles.SuperAdmin);
+        formerAdmin.IsActive = formerSuperAdmin.IsActive = false;
+        _users.Seed(formerAdmin, formerSuperAdmin);
+
+        await _sut.ReactivateAsync(formerAdmin.Id, Ct);
+        await _sut.ReactivateAsync(formerSuperAdmin.Id, Ct);
+
+        Assert.True(formerAdmin.IsActive && formerSuperAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task Reactivate_AsAdmin_ASuperAdmin_ThrowsForbiddenException()
+    {
+        var formerSuperAdmin = NewUser("Ex", Roles.SuperAdmin);
+        formerSuperAdmin.IsActive = false;
+        _users.Seed(formerSuperAdmin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.ReactivateAsync(formerSuperAdmin.Id, Ct));
+        Assert.False(formerSuperAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task GetAll_AsSuperAdmin_WithoutRole_SearchesAcrossEveryVisibleRole()
+    {
+        _currentUser.As(_superAdmin);
+
+        var users = await _sut.GetAllAsync(role: null, search: "A", Ct);
+
+        Assert.Equal(["Alan", "Ana", "Sara"], users.Select(u => u.Name));
+        Assert.Equal(["Ana"], (await _sut.GetAllAsync(Roles.Client, "A", Ct)).Select(u => u.Name));
+    }
+
+    [Fact]
+    public async Task Reactivate_AnActiveUser_ThrowsUserConflictException()
+    {
+        var ex = await Assert.ThrowsAsync<UserConflictException>(() => _sut.ReactivateAsync(_ana.Id, Ct));
+
+        Assert.Equal("El usuario ya está activo.", ex.Message);
+        Assert.Equal(0, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Reactivate_AUserThatDoesNotExist_ThrowsNotFoundException()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.ReactivateAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task Delete_AsSuperAdmin_AnotherSuperAdmin_WorksWhileAnotherOneRemains()
+    {
+        var other = NewUser("Otra", Roles.SuperAdmin);
+        _users.Seed(other);
+        _currentUser.As(_superAdmin);
+
+        await _sut.DeleteAsync(other.Id, Ct);
+
+        Assert.False(other.IsActive);
+    }
+
+    [Fact]
+    public async Task Delete_AsSuperAdmin_AnAdmin_SoftDeletes()
+    {
+        _currentUser.As(_superAdmin);
+
+        await _sut.DeleteAsync(_admin.Id, Ct);
+
+        Assert.False(_admin.IsActive);
+    }
+
+    [Fact]
+    public async Task Update_AsSuperAdmin_AnotherSuperAdmin_ThrowsForbiddenException()
+    {
+        var other = NewUser("Otra", Roles.SuperAdmin);
+        _users.Seed(other);
+        _currentUser.As(_superAdmin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => _sut.UpdateAsync(other.Id, new UpdateUserRequest("Otra", other.Email, Roles.Admin), Ct));
+        Assert.Equal(Roles.SuperAdmin, other.Role);
     }
 
     [Fact]

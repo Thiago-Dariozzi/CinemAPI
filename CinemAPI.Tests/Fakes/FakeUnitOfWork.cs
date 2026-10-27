@@ -15,4 +15,7 @@ public sealed class FakeUnitOfWork : IUnitOfWork
         OnSave?.Invoke();
         return Task.FromResult(0);
     }
+
+    public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken) =>
+        work(cancellationToken);
 }

@@ -4,6 +4,7 @@ using Application.Services;
 using Domain.Entities;
 using Domain.Exceptions;
 using Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace CinemAPI.Tests.Infrastructure;
 
@@ -80,6 +81,88 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
 
         Assert.False(await repository.HasUpcomingByScreenAsync(screen.Id, Day.AddHours(10), CancellationToken.None));
         Assert.True(await repository.HasUpcomingByScreenAsync(screen.Id, Day.AddHours(9), CancellationToken.None));
+    }
+
+    // El índice único filtrado de IsCurrent se verifica por sentencia y EF no ordena los UPDATE según él: en
+    // un solo SaveChanges este test fallaba con 409. El servicio desmarca primero al vigente anterior.
+    [Fact]
+    public async Task FeeService_SwitchingTheCurrentFee_UnmarksThePreviousOneFirst()
+    {
+        try
+        {
+            Guid firstId, secondId;
+            await using (var context = database.CreateContext())
+            {
+                var service = new FeeService(new FeeRepository(context), context);
+                firstId = (await service.CreateAsync(new("Primero", 10m, 0m, IsCurrent: true), CancellationToken.None)).Id;
+                secondId = (await service.CreateAsync(new("Segundo", 5m, 0m, IsCurrent: true), CancellationToken.None)).Id;
+            }
+
+            await using (var context = database.CreateContext())
+            {
+                var service = new FeeService(new FeeRepository(context), context);
+                Assert.Equal(secondId, (await service.GetCurrentAsync(CancellationToken.None))!.Id);
+                await service.UpdateAsync(firstId, new("Primero", 10m, 0m, IsCurrent: true), CancellationToken.None);
+            }
+
+            await using var check = database.CreateContext();
+            Assert.Equal([firstId], await check.Fees.Where(f => f.IsCurrent).Select(f => f.Id).ToListAsync());
+        }
+        finally
+        {
+            // Los otros tests de esta base compran sin cargo.
+            await using var cleanup = database.CreateContext();
+            await cleanup.Fees.IgnoreQueryFilters().ExecuteUpdateAsync(s => s.SetProperty(f => f.IsCurrent, false));
+        }
+    }
+
+    // Si falla el segundo guardado (el que marca al nuevo), la transacción deshace también el primero: el
+    // vigente anterior sigue vigente y el cargo nuevo no queda guardado.
+    [Fact]
+    public async Task FeeService_WhenTheSecondSaveFails_RollsBackAndKeepsThePreviousFee()
+    {
+        try
+        {
+            Guid previousId;
+            await using (var context = database.CreateContext())
+            {
+                var service = new FeeService(new FeeRepository(context), context);
+                previousId = (await service.CreateAsync(new("Anterior", 10m, 0m, IsCurrent: true), CancellationToken.None)).Id;
+            }
+
+            await using (var context = database.CreateContext())
+            {
+                var service = new FeeService(new FeeRepository(context), new FailingSecondSaveUnitOfWork(context));
+                await Assert.ThrowsAsync<FeeConflictException>(
+                    () => service.CreateAsync(new("Nuevo", 5m, 0m, IsCurrent: true), CancellationToken.None));
+            }
+
+            await using var check = database.CreateContext();
+            Assert.Equal([previousId], await check.Fees.Where(f => f.IsCurrent).Select(f => f.Id).ToListAsync());
+            Assert.False(await check.Fees.IgnoreQueryFilters().AnyAsync(f => f.Name == "Nuevo"));
+        }
+        finally
+        {
+            await using var cleanup = database.CreateContext();
+            await cleanup.Fees.IgnoreQueryFilters().ExecuteUpdateAsync(s => s.SetProperty(f => f.IsCurrent, false));
+        }
+    }
+
+    [Fact]
+    public async Task UserRepository_GetByRoles_SearchesByNameOrEmail_AndIncludesDeletedUsers()
+    {
+        // Letras en minúscula para buscar en mayúscula: la collation de la base no las distingue.
+        var tag = string.Concat(Guid.NewGuid().ToString("N").Select(c => (char)('a' + c % 26)))[..10];
+        var byName = new User { Id = Guid.NewGuid(), Name = $"Ana {tag}", Email = $"ana.{Guid.NewGuid():N}@cine.com", PasswordHash = "x", Role = Roles.Client };
+        var byEmail = new User { Id = Guid.NewGuid(), Name = "Beto", Email = $"{tag}@cine.com", PasswordHash = "x", Role = Roles.Client, IsActive = false };
+        var admin = new User { Id = Guid.NewGuid(), Name = $"Admin {tag}", Email = $"admin.{Guid.NewGuid():N}@cine.com", PasswordHash = "x", Role = Roles.Admin };
+        await SaveAsync(byName, byEmail, admin);
+
+        await using var context = database.CreateContext();
+        var found = await new UserRepository(context).GetByRolesAsync([Roles.Client], tag.ToUpperInvariant(), CancellationToken.None);
+
+        // Ordenados por nombre: "Ana …" antes que "Beto". El Admin no entra por el rol.
+        Assert.Equal([byName.Id, byEmail.Id], found.Select(u => u.Id));
     }
 
     [Fact]
@@ -234,5 +317,23 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
             await concurrentRequest();
             return await inner.SaveChangesAsync(cancellationToken);
         }
+
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken) =>
+            inner.ExecuteInTransactionAsync(work, cancellationToken);
+    }
+
+    // Guarda de verdad la primera vez y simula que la base rechaza la segunda (como si otro pedido hubiera
+    // marcado otro cargo en el medio). La transacción es la real del contexto.
+    private sealed class FailingSecondSaveUnitOfWork(IUnitOfWork inner) : IUnitOfWork
+    {
+        private int _saves;
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
+            ++_saves == 2
+                ? throw new UniqueConstraintConflictException(new InvalidOperationException("Simulada"))
+                : inner.SaveChangesAsync(cancellationToken);
+
+        public Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken) =>
+            inner.ExecuteInTransactionAsync(work, cancellationToken);
     }
 }

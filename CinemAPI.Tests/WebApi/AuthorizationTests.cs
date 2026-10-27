@@ -21,6 +21,8 @@ public sealed class AuthorizationTests(ApiFixture api)
     // Función inexistente: el cliente pasa la autorización y el servicio responde 400 (referencia inválida).
     private static readonly string PurchaseBody = $$"""{"showtimeId":"{{NoSuchId}}","seats":[{"row":1,"number":1}]}""";
 
+    private const string FeeBody = """{"name":"{unique}","percentage":5,"fixedAmount":0,"isCurrent":false}""";
+
     public static TheoryData<string, string, string, string?, HttpStatusCode> Cases => new()
     {
         // Auth
@@ -34,6 +36,10 @@ public sealed class AuthorizationTests(ApiFixture api)
         { "Admin", "GET", "/api/user", null, HttpStatusCode.OK },
         { "Admin", "GET", "/api/user?role=Admin", null, HttpStatusCode.Forbidden },
         { "SuperAdmin", "GET", "/api/user?role=Admin", null, HttpStatusCode.OK },
+        { "Admin", "GET", "/api/user?role=Client&search=demo", null, HttpStatusCode.OK },
+        { Anonymous, "POST", $"/api/user/{NoSuchId}/reactivate", null, HttpStatusCode.Unauthorized },
+        { "Client", "POST", $"/api/user/{NoSuchId}/reactivate", null, HttpStatusCode.Forbidden },
+        { "Admin", "POST", $"/api/user/{NoSuchId}/reactivate", null, HttpStatusCode.NotFound },
 
         // Genre: lectura pública, escritura staff
         { Anonymous, "GET", "/api/genre", null, HttpStatusCode.OK },
@@ -66,6 +72,32 @@ public sealed class AuthorizationTests(ApiFixture api)
         // Fee: el cargo vigente lo ve cualquier usuario logueado (204: no hay ninguno en la base de prueba)
         { Anonymous, "GET", "/api/fee/current", null, HttpStatusCode.Unauthorized },
         { "Client", "GET", "/api/fee/current", null, HttpStatusCode.NoContent },
+
+        // Fee: el ABM es solo del SuperAdmin (los altas de prueba no quedan vigentes)
+        { Anonymous, "GET", "/api/fee", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", "/api/fee", null, HttpStatusCode.Forbidden },
+        { "Admin", "GET", "/api/fee", null, HttpStatusCode.Forbidden },
+        { "SuperAdmin", "GET", "/api/fee", null, HttpStatusCode.OK },
+        { Anonymous, "GET", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Forbidden },
+        { "Admin", "GET", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Forbidden },
+        { "SuperAdmin", "GET", $"/api/fee/{NoSuchId}", null, HttpStatusCode.NotFound },
+        { Anonymous, "POST", "/api/fee", FeeBody, HttpStatusCode.Unauthorized },
+        { "Client", "POST", "/api/fee", FeeBody, HttpStatusCode.Forbidden },
+        { "Admin", "POST", "/api/fee", FeeBody, HttpStatusCode.Forbidden },
+        { "SuperAdmin", "POST", "/api/fee", FeeBody, HttpStatusCode.Created },
+        { "SuperAdmin", "POST", "/api/fee", """{"name":"Caro","percentage":101,"fixedAmount":0,"isCurrent":false}""", HttpStatusCode.BadRequest },
+        { "SuperAdmin", "POST", "/api/fee", """{"name":"Negativo","percentage":5,"fixedAmount":-1,"isCurrent":false}""", HttpStatusCode.BadRequest },
+        { "SuperAdmin", "POST", "/api/fee", """{"name":"Decimales","percentage":12.345,"fixedAmount":0,"isCurrent":false}""", HttpStatusCode.BadRequest },
+        { "SuperAdmin", "POST", "/api/fee", """{"name":"Sin vigente","percentage":5,"fixedAmount":0}""", HttpStatusCode.BadRequest },
+        { Anonymous, "PUT", $"/api/fee/{NoSuchId}", FeeBody, HttpStatusCode.Unauthorized },
+        { "Client", "PUT", $"/api/fee/{NoSuchId}", FeeBody, HttpStatusCode.Forbidden },
+        { "Admin", "PUT", $"/api/fee/{NoSuchId}", FeeBody, HttpStatusCode.Forbidden },
+        { "SuperAdmin", "PUT", $"/api/fee/{NoSuchId}", FeeBody, HttpStatusCode.NotFound },
+        { Anonymous, "DELETE", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Unauthorized },
+        { "Client", "DELETE", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Forbidden },
+        { "Admin", "DELETE", $"/api/fee/{NoSuchId}", null, HttpStatusCode.Forbidden },
+        { "SuperAdmin", "DELETE", $"/api/fee/{NoSuchId}", null, HttpStatusCode.NotFound },
 
         // Purchase: compra, "mis compras" y cancelar las propias solo clientes; el listado de ventas y
         // cancelar cualquier compra solo staff
@@ -172,6 +204,37 @@ public sealed class AuthorizationTests(ApiFixture api)
             new { name = "Copia", email = ApiFixture.SuperAdminEmail.ToUpperInvariant(), password = ApiFixture.DefaultPassword });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    // Alta de un Admin por el SuperAdmin, baja (no puede entrar) y reactivación (vuelve a entrar). El Admin
+    // no puede reactivarse ni darse de baja entre pares, y el SuperAdmin no puede darse de baja a sí mismo.
+    [Fact]
+    public async Task Admin_CreatedDeletedAndReactivatedBySuperAdmin()
+    {
+        var email = ApiFixture.UniqueEmail("admin");
+        using var asSuperAdmin = api.CreateClient(api.SuperAdminToken);
+        using var asOtherAdmin = api.CreateClient(api.AdminToken);
+        var created = await asSuperAdmin.PostAsJsonAsync("/api/user", new { name = "Nuevo Admin", email, password = ApiFixture.DefaultPassword, role = "Admin" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdBody = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdBody.RootElement.GetProperty("id").GetGuid();
+        await api.LoginAsync(email, ApiFixture.DefaultPassword);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await asOtherAdmin.DeleteAsync($"/api/user/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await asSuperAdmin.DeleteAsync($"/api/user/{id}")).StatusCode);
+        using var deletedLogin = await asOtherAdmin.PostAsJsonAsync("/api/auth/login", new { email, password = ApiFixture.DefaultPassword });
+        Assert.Equal(HttpStatusCode.Unauthorized, deletedLogin.StatusCode);
+        using var listed = JsonDocument.Parse(await asSuperAdmin.GetStringAsync($"/api/user?role=Admin&search={Uri.EscapeDataString(email)}"));
+        Assert.False(Assert.Single(listed.RootElement.EnumerateArray()).GetProperty("isActive").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await asOtherAdmin.PostAsync($"/api/user/{id}/reactivate", content: null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await asSuperAdmin.PostAsync($"/api/user/{id}/reactivate", content: null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await asSuperAdmin.PostAsync($"/api/user/{id}/reactivate", content: null)).StatusCode);
+        await api.LoginAsync(email, ApiFixture.DefaultPassword);
+
+        using var me = JsonDocument.Parse(await asSuperAdmin.GetStringAsync("/api/auth/me"));
+        var superAdminId = me.RootElement.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.Forbidden, (await asSuperAdmin.DeleteAsync($"/api/user/{superAdminId}")).StatusCode);
     }
 
     // Dar de baja a un cliente corta su acceso en el momento, aunque su token siga vigente.

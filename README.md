@@ -44,11 +44,21 @@ OpenAPI (solo Development): `http://localhost:5288/openapi/v1.json`. Las operaci
 
 | Rol | Cómo se crea | Puede |
 |---|---|---|
-| SuperAdmin | Seed (`SeedSuperAdmin:*`) | Todo lo de Admin + administrar Admins (y el ABM de cargos, próximamente) |
-| Admin | Lo crea un SuperAdmin (`POST /api/user`) | Catálogo, ventas (ver y cancelar compras), ver y dar de baja clientes |
+| SuperAdmin | Seed (`SeedSuperAdmin:*`) | Todo lo de Admin + administrar Admins (alta con contraseña inicial, edición, baja y reactivación) y el ABM de cargos |
+| Admin | Lo crea un SuperAdmin (`POST /api/user`) | Catálogo, ventas (ver y cancelar compras), clientes (buscar, dar de baja y reactivar) |
 | Client | Se registra solo (`POST /api/auth/register`) | Cartelera, comprar y cancelar sus entradas, su perfil y contraseña |
 
 Usuarios demo en Development (contraseña `DemoUsers:Password`): `admin@cinemapi.com` (Admin) y `cliente@cinemapi.com` (Client). Los usuarios generados por Bogus son clientes con la misma contraseña.
+
+| Endpoint | Quién | Qué hace |
+|---|---|---|
+| `GET /api/user?role=Client&search=` | staff | Usuarios del rol (Admin solo ve clientes), **incluidos los dados de baja** (`isActive`); `search` busca en nombre y email |
+| `POST /api/user` / `PUT /api/user/{id}` | staff | Admin crea y edita clientes; SuperAdmin, clientes y Admins. Nadie crea ni edita SuperAdmins (403) |
+| `DELETE /api/user/{id}` | staff | Baja lógica con las mismas reglas; nadie se da de baja a sí mismo y siempre queda un SuperAdmin activo (403) |
+| `POST /api/user/{id}/reactivate` | staff | Deshace la baja (mismas reglas; ya activo → 409). A un usuario dado de baja solo se lo reactiva: `GET`/`PUT`/`DELETE /api/user/{id}` responden 404 |
+| `GET /api/fee`, `GET /api/fee/{id}` | SuperAdmin | Cargos (el vigente primero) |
+| `POST /api/fee` / `PUT /api/fee/{id}` | SuperAdmin | `{ name, percentage (0–100), fixedAmount (≥ 0), isCurrent }`, hasta 2 decimales. `isCurrent: true` desmarca al vigente anterior |
+| `DELETE /api/fee/{id}` | SuperAdmin | Baja lógica; si era el vigente, las compras nuevas quedan sin cargo |
 
 Autenticación: `POST /api/auth/login` devuelve `{ token, expiresAt, user }`; el token (8 h) va en `Authorization: Bearer <token>`. Sin token → 401; con un rol que no alcanza → 403 (ambos como ProblemDetails).
 

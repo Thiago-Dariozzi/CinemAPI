@@ -36,4 +36,12 @@ public sealed class CinemAPIContext(DbContextOptions<CinemAPIContext> options) :
             throw new UniqueConstraintConflictException(ex);
         }
     }
+
+    // Si work falla, el Dispose sin Commit deshace lo que ya se había guardado.
+    public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken)
+    {
+        await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+        await work(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
 }
