@@ -42,7 +42,7 @@ public static class SecurityServiceCollectionExtensions
                     RoleClaimType = ClaimNames.Role,
                     ClockSkew = TimeSpan.FromMinutes(1),
                 };
-                bearer.Events = new JwtBearerEvents { OnTokenValidated = RejectInactiveUserAsync };
+                bearer.Events = new JwtBearerEvents { OnTokenValidated = RejectOutdatedTokenAsync };
             });
 
         services.AddAuthorizationBuilder()
@@ -58,14 +58,19 @@ public static class SecurityServiceCollectionExtensions
         return services;
     }
 
-    // Un usuario dado de baja deja de poder usar la API en el momento, aunque su token no haya vencido.
-    private static async Task RejectInactiveUserAsync(TokenValidatedContext context)
+    // Un usuario dado de baja, o al que le cambiaron el rol, deja de poder usar ese token en el momento
+    // (401: el front cierra la sesión y vuelve a pedir login, que emite un token con el rol nuevo).
+    private static async Task RejectOutdatedTokenAsync(TokenValidatedContext context)
     {
         var subject = context.Principal?.FindFirstValue(ClaimNames.Subject);
+        var tokenRole = context.Principal?.FindFirstValue(ClaimNames.Role);
         var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
-        if (!Guid.TryParse(subject, out var userId) || !await authService.IsActiveUserAsync(userId, context.HttpContext.RequestAborted))
+        var currentRole = Guid.TryParse(subject, out var userId)
+            ? await authService.GetActiveRoleAsync(userId, context.HttpContext.RequestAborted)
+            : null;
+        if (currentRole is null || currentRole != tokenRole)
         {
-            context.Fail("El usuario no existe o fue dado de baja.");
+            context.Fail("El usuario fue dado de baja o cambió de rol.");
         }
     }
 }

@@ -18,8 +18,8 @@ public sealed class FakeUserRepository : InMemoryRepository<User>, IUserReposito
     public Task<bool> EmailExistsAsync(string email, Guid? excludeId, CancellationToken ct) =>
         Task.FromResult(Stored.Any(u => SameEmail(u.Email, email) && u.Id != excludeId));
 
-    public Task<IReadOnlyList<User>> GetByRoleAsync(string role, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<User>>(Active().Where(u => u.Role == role).OrderBy(u => u.Name).ToList());
+    public Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<User>>(Active().Where(u => roles.Contains(u.Role)).OrderBy(u => u.Name).ToList());
 
     public Task<int> CountByRoleAsync(string role, CancellationToken ct) =>
         Task.FromResult(Active().Count(u => u.Role == role));

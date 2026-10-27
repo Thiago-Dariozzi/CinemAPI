@@ -39,4 +39,35 @@ public sealed class MigrationTests
             await context.Database.EnsureDeletedAsync();
         }
     }
+
+    // Editada a mano: EF proponía borrar Password y crear PasswordHash vacía. El valor viejo tiene que
+    // llegar intacto para que DataInitializer lo hashee.
+    [Fact]
+    public async Task RenameUserPasswordToPasswordHash_KeepsExistingPasswords()
+    {
+        var connectionString =
+            $@"Server=(localdb)\MSSQLLocalDB;Database=CinemAPI_MigrationTests_{Guid.NewGuid():N};Trusted_Connection=True;TrustServerCertificate=True;";
+        await using var context = new CinemAPIContext(
+            new DbContextOptionsBuilder<CinemAPIContext>().UseSqlServer(connectionString).Options);
+        var migrator = context.GetService<IMigrator>();
+
+        try
+        {
+            await migrator.MigrateAsync("AddMovieIsShowing");
+            var userId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"INSERT INTO Users (Id, Name, Email, Password, Role, IsActive) VALUES ({userId}, N'Ana', N'ana@cine.com', N'clave-vieja', N'Client', 1)");
+
+            await migrator.MigrateAsync();
+
+            var passwordHash = await context.Database
+                .SqlQuery<string>($"SELECT PasswordHash AS Value FROM Users WHERE Id = {userId}")
+                .SingleAsync();
+            Assert.Equal("clave-vieja", passwordHash);
+        }
+        finally
+        {
+            await context.Database.EnsureDeletedAsync();
+        }
+    }
 }

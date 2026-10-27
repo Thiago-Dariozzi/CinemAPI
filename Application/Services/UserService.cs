@@ -20,19 +20,17 @@ public sealed class UserService(
     public async Task<IReadOnlyList<UserResponse>> GetAllAsync(string? role, CancellationToken ct)
     {
         var visible = UserRules.VisibleRoles(currentUser.Role);
-        if (role is null)
+        if (role is not null)
         {
-            var all = await userRepository.GetAllAsync(ct);
-            return all.Where(u => visible.Contains(u.Role)).Select(u => u.ToResponse()).ToList();
+            EnsureRoleExists(role);
+            if (!visible.Contains(role))
+            {
+                throw new ForbiddenException($"No tenés permiso para ver usuarios con el rol {role}.");
+            }
         }
 
-        EnsureRoleExists(role);
-        if (!visible.Contains(role))
-        {
-            throw new ForbiddenException($"No tenés permiso para ver usuarios con el rol {role}.");
-        }
-
-        return (await userRepository.GetByRoleAsync(role, ct)).Select(u => u.ToResponse()).ToList();
+        var users = await userRepository.GetByRolesAsync(role is null ? visible : [role], ct);
+        return users.Select(u => u.ToResponse()).ToList();
     }
 
     public async Task<UserResponse> GetByIdAsync(Guid id, CancellationToken ct)

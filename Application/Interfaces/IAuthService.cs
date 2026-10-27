@@ -10,5 +10,7 @@ public interface IAuthService
     Task<UserResponse> GetCurrentUserAsync(CancellationToken ct);
     Task UpdateProfileAsync(UpdateProfileRequest request, CancellationToken ct);
     Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct);
-    Task<bool> IsActiveUserAsync(Guid userId, CancellationToken ct);
+    // Rol actual del usuario, o null si no existe o fue dado de baja. Se compara con el del token en
+    // cada request: un cambio de rol o una baja cortan el acceso sin esperar a que el token venza.
+    Task<string?> GetActiveRoleAsync(Guid userId, CancellationToken ct);
 }

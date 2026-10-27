@@ -73,7 +73,8 @@ public sealed class AuthService(
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    public Task<bool> IsActiveUserAsync(Guid userId, CancellationToken ct) => userRepository.ExistsAsync(userId, ct);
+    public async Task<string?> GetActiveRoleAsync(Guid userId, CancellationToken ct) =>
+        (await userRepository.GetByIdAsync(userId, ct))?.Role;
 
     private AuthResponse CreateResponse(User user)
     {

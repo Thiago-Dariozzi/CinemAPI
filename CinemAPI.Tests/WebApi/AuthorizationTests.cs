@@ -162,6 +162,26 @@ public sealed class AuthorizationTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.Unauthorized, (await asClient.GetAsync("/api/auth/me")).StatusCode);
     }
 
+    // Un Admin pasado a Client no conserva los permisos de staff hasta que venza su token.
+    [Fact]
+    public async Task Token_IsRejectedAfterARoleChange()
+    {
+        var email = ApiFixture.UniqueEmail("degradado");
+        using var asSuperAdmin = api.CreateClient(api.SuperAdminToken);
+        var created = await asSuperAdmin.PostAsJsonAsync("/api/user", new { name = "Degradado", email, password = ApiFixture.DefaultPassword, role = "Admin" });
+        using var createdBody = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdBody.RootElement.GetProperty("id").GetGuid();
+        using var asFormerAdmin = api.CreateClient(await api.LoginAsync(email, ApiFixture.DefaultPassword));
+        Assert.Equal(HttpStatusCode.OK, (await asFormerAdmin.GetAsync("/api/user")).StatusCode);
+
+        var demoted = await asSuperAdmin.PutAsJsonAsync($"/api/user/{id}", new { name = "Degradado", email, role = "Client" });
+        Assert.Equal(HttpStatusCode.NoContent, demoted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await asFormerAdmin.GetAsync("/api/user")).StatusCode);
+        using var asClient = api.CreateClient(await api.LoginAsync(email, ApiFixture.DefaultPassword));
+        Assert.Equal(HttpStatusCode.Forbidden, (await asClient.GetAsync("/api/user")).StatusCode);
+    }
+
     // Las contraseñas de antes de la autenticación estaban en texto plano: al arrancar se reemplazan por
     // su hash y se puede seguir entrando con la misma contraseña.
     [Fact]

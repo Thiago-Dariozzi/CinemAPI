@@ -14,8 +14,8 @@ public sealed class UserRepository(CinemAPIContext context) : BaseRepository<Use
     public Task<bool> EmailExistsAsync(string email, Guid? excludeId, CancellationToken ct) =>
         Context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email && u.Id != excludeId, ct);
 
-    public async Task<IReadOnlyList<User>> GetByRoleAsync(string role, CancellationToken ct) =>
-        await Context.Users.AsNoTracking().Where(u => u.Role == role).OrderBy(u => u.Name).ToListAsync(ct);
+    public async Task<IReadOnlyList<User>> GetByRolesAsync(IReadOnlyCollection<string> roles, CancellationToken ct) =>
+        await Context.Users.AsNoTracking().Where(u => roles.Contains(u.Role)).OrderBy(u => u.Name).ToListAsync(ct);
 
     public Task<int> CountByRoleAsync(string role, CancellationToken ct) =>
         Context.Users.CountAsync(u => u.Role == role, ct);
