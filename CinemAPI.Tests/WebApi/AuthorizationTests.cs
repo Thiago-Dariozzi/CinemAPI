@@ -45,6 +45,7 @@ public sealed class AuthorizationTests(ApiFixture api)
         { Anonymous, "GET", $"/api/movie/active?genreId={NoSuchId}&date=2026-11-02", null, HttpStatusCode.OK },
         { Anonymous, "GET", "/api/movie/active?date=no-es-fecha", null, HttpStatusCode.BadRequest },
         { Anonymous, "GET", "/api/movie/active?genreId=abc", null, HttpStatusCode.BadRequest },
+        { Anonymous, "GET", "/api/movie/active?date=9999-12-31", null, HttpStatusCode.BadRequest },
         { Anonymous, "GET", $"/api/movie/{NoSuchId}/showtimes", null, HttpStatusCode.NotFound },
 
         // Reports: solo staff; las fechas son obligatorias y el rango tiene que ser válido
@@ -132,6 +133,7 @@ public sealed class AuthorizationTests(ApiFixture api)
         { Anonymous, "GET", "/api/purchase", null, HttpStatusCode.Unauthorized },
         { "Client", "GET", "/api/purchase", null, HttpStatusCode.Forbidden },
         { "Admin", "GET", "/api/purchase", null, HttpStatusCode.OK },
+        { "Admin", "GET", "/api/purchase?to=9999-12-31", null, HttpStatusCode.BadRequest },
         { "SuperAdmin", "GET", "/api/purchase", null, HttpStatusCode.OK },
         { Anonymous, "POST", $"/api/purchase/mine/{NoSuchId}/cancel", null, HttpStatusCode.Unauthorized },
         { "Admin", "POST", $"/api/purchase/mine/{NoSuchId}/cancel", null, HttpStatusCode.Forbidden },

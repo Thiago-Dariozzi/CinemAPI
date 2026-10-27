@@ -344,6 +344,16 @@ public sealed class PurchaseServiceTests
         Assert.Equal([mine.Id], result.Select(p => p.Id));
     }
 
+    // Antes respondía 500: el filtro pide el día siguiente y 31/12/9999 no lo tiene.
+    [Fact]
+    public async Task Search_UpToTheLastRepresentableDay_ThrowsBusinessRuleException()
+    {
+        _currentUser.As(_admin);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(
+            () => _sut.SearchAsync(new(null, null, null, DateOnly.MaxValue, null), Ct));
+    }
+
     [Fact]
     public async Task Search_FiltersByMovieShowtimeDayAndStatus()
     {

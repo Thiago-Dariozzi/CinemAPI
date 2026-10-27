@@ -136,6 +136,13 @@ public sealed class MovieServiceTests
         Assert.Equal(movie, Assert.Single(await _sut.GetShowingMoviesAsync(genreId: null, date: null, Ct)).Id);
     }
 
+    // Antes respondía 500: el filtro pide el día siguiente y 31/12/9999 no lo tiene.
+    [Fact]
+    public async Task GetShowingMovies_OnTheLastRepresentableDay_ThrowsBusinessRuleException()
+    {
+        await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.GetShowingMoviesAsync(genreId: null, DateOnly.MaxValue, Ct));
+    }
+
     [Fact]
     public async Task Update_WhenItsGenreWasDeleted_CanStillBeEditedWithoutChangingIt()
     {

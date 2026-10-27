@@ -15,7 +15,7 @@ public sealed class ReportService(IReportRepository reportRepository) : IReportS
     public async Task<SalesReportResponse> GetSalesAsync(SalesReportRequest request, CancellationToken ct)
     {
         var from = request.From.GetValueOrDefault();
-        var to = EnsureNotLastDay(request.To.GetValueOrDefault());
+        var to = DateRules.EnsureHasNextDay(request.To.GetValueOrDefault());
         if (from > to)
         {
             throw new BusinessRuleException("La fecha 'desde' no puede ser posterior a la fecha 'hasta'.");
@@ -52,7 +52,7 @@ public sealed class ReportService(IReportRepository reportRepository) : IReportS
     // pasar el 100 % (se informa tal cual, no se recorta).
     public async Task<OccupancyReportResponse> GetOccupancyAsync(OccupancyReportRequest request, CancellationToken ct)
     {
-        var date = EnsureNotLastDay(request.Date.GetValueOrDefault());
+        var date = DateRules.EnsureHasNextDay(request.Date.GetValueOrDefault());
         var start = date.ToDateTime(TimeOnly.MinValue);
         var showtimes = (await reportRepository.GetShowtimeSeatsAsync(start, start.AddDays(1), ct))
             .Select(s => new ShowtimeOccupancyResponse(
@@ -64,10 +64,6 @@ public sealed class ReportService(IReportRepository reportRepository) : IReportS
         var soldSeats = showtimes.Sum(s => s.SoldSeats);
         return new OccupancyReportResponse(date, totalSeats, soldSeats, Percentage(soldSeats, totalSeats), showtimes);
     }
-
-    // El período termina al día siguiente: con 31/12/9999 no hay "día siguiente" y AddDays daría un 500.
-    private static DateOnly EnsureNotLastDay(DateOnly day) =>
-        day < DateOnly.MaxValue ? day : throw new BusinessRuleException("La fecha está fuera del rango permitido.");
 
     private static decimal Percentage(int part, int whole) =>
         whole == 0 ? 0m : Math.Round(part * 100m / whole, 1, MidpointRounding.AwayFromZero);

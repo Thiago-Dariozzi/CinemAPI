@@ -20,6 +20,11 @@ public sealed class MovieService(
     // mañana que ya pasaron). Un día pasado no tiene ninguna.
     public async Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(Guid? genreId, DateOnly? date, CancellationToken ct)
     {
+        if (date is { } requested)
+        {
+            DateRules.EnsureHasNextDay(requested);
+        }
+
         var movies = await movieRepository.GetShowingMoviesAsync(genreId, ct);
         if (date is not { } day)
         {

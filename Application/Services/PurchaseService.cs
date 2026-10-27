@@ -106,7 +106,7 @@ public sealed class PurchaseService(
             request.MovieId,
             request.ShowtimeId,
             request.From?.ToDateTime(TimeOnly.MinValue),
-            request.To?.AddDays(1).ToDateTime(TimeOnly.MinValue),
+            request.To is { } to ? DateRules.EnsureHasNextDay(to).AddDays(1).ToDateTime(TimeOnly.MinValue) : null,
             request.Status);
         var now = timeProvider.Now();
         return (await purchaseRepository.SearchAsync(filter, ct)).Select(p => ToResponse(p, now)).ToList();
