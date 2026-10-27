@@ -55,7 +55,7 @@ La regla de dependencias la verifica un test (`LayerDependencyTests`), no solo l
 | | Cómo se verifica |
 |---|---|
 | Backend | `dotnet build` (warnings como errores), `dotnet test` (344 tests: servicios con fakes, integración contra LocalDB real, API con `WebApplicationFactory`, arquitectura), `dotnet format --verify-no-changes` |
-| Frontend | `npm run lint` y `npm run build` |
+| Frontend | `npm run lint`, `npm run build` y `npm run test` (21 tests con Vitest + Testing Library: login con error, rutas por rol, selección de butacas y cálculo del resumen) |
 | Revisión | Cada tarea pasó por un revisor de backend y uno de frontend (`.claude/agents/`) antes del commit |
 | Prueba manual | Cada endpoint nuevo se probó con `curl` contra una copia de la base real, con el `Origin` del front (CORS) |
 
