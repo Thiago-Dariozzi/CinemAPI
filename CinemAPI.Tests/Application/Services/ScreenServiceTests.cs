@@ -26,7 +26,7 @@ public sealed class ScreenServiceTests
         _showtimes = new FakeShowtimeRepository(_movies);
         _purchases = new FakePurchaseRepository(_showtimes, _movies, _screens, new FakeUserRepository());
         _screens.Seed(_screen);
-        _sut = new ScreenService(_screens, new FakeTicketRepository(_purchases, _showtimes), new FixedTimeProvider(Now), _unitOfWork);
+        _sut = new ScreenService(_screens, _showtimes, new FakeTicketRepository(_purchases, _showtimes), new FixedTimeProvider(Now), _unitOfWork);
     }
 
     [Fact]
@@ -67,12 +67,42 @@ public sealed class ScreenServiceTests
         Assert.True(_screen.IsActive);
     }
 
-    private void SeedSoldSeat(DateTime start, int row, int number)
+    [Fact]
+    public async Task Delete_WithAFutureShowtimeWithoutSales_ThrowsConflict()
+    {
+        var showtime = SeedShowtime(Now.AddHours(1));
+
+        var ex = await Assert.ThrowsAsync<ScreenConflictException>(() => _sut.DeleteAsync(_screen.Id, Ct));
+        Assert.Contains("funciones próximas", ex.Message, StringComparison.Ordinal);
+        Assert.True(_screen.IsActive);
+
+        showtime.IsActive = false;
+        await _sut.DeleteAsync(_screen.Id, Ct);
+        Assert.False(_screen.IsActive);
+    }
+
+    [Fact]
+    public async Task Delete_WithOnlyPastShowtimes_IsAllowed()
+    {
+        SeedSoldSeat(Now.AddMinutes(-1), row: 1, number: 1);
+
+        await _sut.DeleteAsync(_screen.Id, Ct);
+
+        Assert.False(_screen.IsActive);
+    }
+
+    private Showtime SeedShowtime(DateTime start)
     {
         var movie = new Movie { Id = Guid.NewGuid(), Title = "Película", DurationMinutes = 90 };
         var showtime = new Showtime { Id = Guid.NewGuid(), MovieId = movie.Id, ScreenId = _screen.Id, StartTime = start, Price = 10m };
         _movies.Seed(movie);
         _showtimes.Seed(showtime);
+        return showtime;
+    }
+
+    private void SeedSoldSeat(DateTime start, int row, int number)
+    {
+        var showtime = SeedShowtime(start);
         var purchaseId = Guid.NewGuid();
         _purchases.Seed(new Purchase
         {

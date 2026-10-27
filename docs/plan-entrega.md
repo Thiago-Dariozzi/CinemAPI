@@ -77,7 +77,7 @@ User 1───* Purchase *───1 Showtime *───1 Movie *───1 Gen
 5. Ninguna butaca ocupada en esa función (validado en el servicio → 409 con la lista de butacas tomadas; el índice único cubre la carrera).
 6. Precio de cada entrada = `Showtime.Price`; se aplica el cargo vigente si hay.
 
-**Cancelación** (`POST /api/purchase/{id}/cancel`): el cliente solo las suyas y hasta **2 horas antes** de la función; Admin/SuperAdmin cualquiera, sin límite de tiempo. Marca `Status = Cancelled`, `CancelledAt`, y `IsCancelled = true` en los tickets (libera las butacas). Cancelar dos veces → 409.
+**Cancelación** (`POST /api/purchase/mine/{id}/cancel` el cliente, `POST /api/purchase/{id}/cancel` el staff): el cliente solo las suyas y hasta **2 horas antes** de la función; Admin/SuperAdmin cualquiera, sin límite de tiempo. Marca `Status = Cancelled`, `CancelledAt`, y `IsCancelled = true` en los tickets (libera las butacas). Cancelar dos veces → 409.
 
 **Hora**: `TimeProvider` inyectado (viene con .NET, sin paquete) para poder testear "no empezó" y "2 horas antes". `StartTime` se guarda en hora local del cine (así la manda el front hoy); la comparación usa la hora local del servidor. Se documenta.
 
@@ -142,7 +142,8 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 | `POST /api/purchase` | 👤 | `{ showtimeId, seats: [{ row, number }] }` → compra con tickets, subtotal, cargo y total |
 | `GET /api/purchase/mine` | 👤 | Sus compras (con película, sala, horario y butacas) |
 | `GET /api/purchase/{id}` | 👤 dueño / 🛠 | Ajena → 403 |
-| `POST /api/purchase/{id}/cancel` | 👤 dueño (≥ 2 h antes) / 🛠 | |
+| `POST /api/purchase/mine/{id}/cancel` | 👤 dueño (> 2 h antes) | |
+| `POST /api/purchase/{id}/cancel` | 🛠 | Cualquier compra, sin límite de tiempo |
 | `GET /api/purchase?from=&to=&movieId=&status=` | 🛠 | Todas las ventas |
 
 ### Tickets — `TicketController` ✖
@@ -203,7 +204,8 @@ Los tests de cada servicio nuevo van **en la misma tarea** que el servicio (Defi
 
 El pedido juntó en una sola tarea lo que acá eran las tareas 2, 3, 4 y la parte de ventas de la 5:
 
-- Back: `Screen.Rows`/`SeatsPerRow`, `Fee` (Guid + `IsCurrent`, solo `GET /api/fee/current`; el ABM de cargos queda pendiente), `Purchase`, `Ticket` por butaca, **una** migración `AddSeatLayoutFeesAndPurchases`, `GET /api/showtime/{id}/seats`, `GET /api/showtime/upcoming`, `PurchaseController` completo (incluye `GET /api/purchase` con filtros para el staff), `TicketController` eliminado. Reglas extra: no se borra una función con entradas vendidas ni se le cambia la sala, y no se achica ni se da de baja una sala con entradas vendidas para funciones futuras (409).
+- Back: `Screen.Rows`/`SeatsPerRow`, `Fee` (Guid + `IsCurrent`, solo `GET /api/fee/current`; el ABM de cargos queda pendiente), `Purchase`, `Ticket` por butaca, **una** migración `AddSeatLayoutFeesAndPurchases`, `GET /api/showtime/{id}/seats`, `GET /api/showtime/upcoming`, `PurchaseController` completo (incluye `GET /api/purchase` con filtros para el staff), `TicketController` eliminado. Reglas extra: no se borra una función con entradas vendidas ni se le cambia el horario, la sala o la película; no se achica una sala con entradas vendidas para funciones futuras, y no se da de baja una sala con funciones futuras activas (409).
+- Ajustes del 27/10 (respuestas a las decisiones abiertas): se bloquea también el cambio de horario con entradas vendidas; la cancelación se separa en `POST /api/purchase/mine/{id}/cancel` (`ClientOnly`) y `POST /api/purchase/{id}/cancel` (`Staff`), con política por endpoint; dar de baja una sala con funciones futuras da 409. Cuando se haga el ABM de cargos, sus endpoints van con `SuperAdminOnly` y tests de 403.
 - Front: cartelera → funciones → mapa de butacas → resumen → confirmar; "Mis entradas" (próximas y pasadas, cancelar); "Ventas" para el staff con filtros; salas con filas × butacas. Se borraron `Tickets/`, `UserTickets` y `ticketApi`.
 - Pendiente de las tareas originales: ABM de cargos (SuperAdmin), reportes, fecha de estreno y refactor de `MovieCard`/`MovieFunctionsPanel`.
 

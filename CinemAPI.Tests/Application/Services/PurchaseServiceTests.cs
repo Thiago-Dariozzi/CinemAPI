@@ -228,14 +228,14 @@ public sealed class PurchaseServiceTests
 
         if (allowed)
         {
-            var result = await _sut.CancelAsync(purchase.Id, Ct);
+            var result = await _sut.CancelMineAsync(purchase.Id, Ct);
             Assert.Equal(PurchaseStatus.Cancelled, result.Status);
             Assert.Equal(_clock.Now, result.CancelledAt);
             Assert.False(result.CanCancel);
         }
         else
         {
-            var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.CancelAsync(purchase.Id, Ct));
+            var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.CancelMineAsync(purchase.Id, Ct));
             Assert.Contains("2 horas", ex.Message, StringComparison.Ordinal);
             Assert.Equal(PurchaseStatus.Confirmed, _purchases.Stored.Single().Status);
         }
@@ -246,7 +246,7 @@ public sealed class PurchaseServiceTests
     {
         var purchase = await _sut.CreateAsync(Request(_showtime, (3, 3), (3, 4)), Ct);
 
-        await _sut.CancelAsync(purchase.Id, Ct);
+        await _sut.CancelMineAsync(purchase.Id, Ct);
 
         Assert.All(_purchases.Stored.Single().Tickets, t => Assert.True(t.IsCancelled));
         Assert.Empty(await _tickets.GetTakenSeatsAsync(_showtime.Id, Ct));
@@ -260,7 +260,7 @@ public sealed class PurchaseServiceTests
         var purchase = await _sut.CreateAsync(Request(_showtime, (1, 1)), Ct);
         _currentUser.As(_otherClient);
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.CancelAsync(purchase.Id, Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.CancelMineAsync(purchase.Id, Ct));
         Assert.Equal(PurchaseStatus.Confirmed, _purchases.Stored.Single().Status);
     }
 
@@ -271,24 +271,52 @@ public sealed class PurchaseServiceTests
         _clock.Now = _showtime.StartTime.AddMinutes(10);
         _currentUser.As(_admin);
 
-        var result = await _sut.CancelAsync(purchase.Id, Ct);
+        var result = await _sut.CancelAnyAsync(purchase.Id, Ct);
 
         Assert.Equal(PurchaseStatus.Cancelled, result.Status);
+    }
+
+    [Fact]
+    public async Task CancelMine_OnAnotherClientsCancelledPurchase_ThrowsForbidden_NotConflict()
+    {
+        var purchase = await _sut.CreateAsync(Request(_showtime, (1, 1)), Ct);
+        await _sut.CancelMineAsync(purchase.Id, Ct);
+        _currentUser.As(_otherClient);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.CancelMineAsync(purchase.Id, Ct));
+    }
+
+    [Fact]
+    public async Task CancelAny_ByAClient_ThrowsForbidden_EvenForTheirOwnPurchase()
+    {
+        var purchase = await _sut.CreateAsync(Request(_showtime, (1, 1)), Ct);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.CancelAnyAsync(purchase.Id, Ct));
+        Assert.Equal(PurchaseStatus.Confirmed, _purchases.Stored.Single().Status);
+    }
+
+    [Fact]
+    public async Task CancelMine_ByStaff_ThrowsForbidden_ForAPurchaseOfAClient()
+    {
+        var purchase = await _sut.CreateAsync(Request(_showtime, (1, 1)), Ct);
+        _currentUser.As(_admin);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.CancelMineAsync(purchase.Id, Ct));
     }
 
     [Fact]
     public async Task Cancel_Twice_ThrowsConflict()
     {
         var purchase = await _sut.CreateAsync(Request(_showtime, (1, 1)), Ct);
-        await _sut.CancelAsync(purchase.Id, Ct);
+        await _sut.CancelMineAsync(purchase.Id, Ct);
 
-        await Assert.ThrowsAsync<PurchaseConflictException>(() => _sut.CancelAsync(purchase.Id, Ct));
+        await Assert.ThrowsAsync<PurchaseConflictException>(() => _sut.CancelMineAsync(purchase.Id, Ct));
     }
 
     [Fact]
     public async Task Cancel_WhenThePurchaseDoesNotExist_ThrowsNotFound()
     {
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.CancelAsync(Guid.NewGuid(), Ct));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.CancelMineAsync(Guid.NewGuid(), Ct));
     }
 
     [Fact]
@@ -326,7 +354,7 @@ public sealed class PurchaseServiceTests
         _clock.Now = Now.AddDays(-3);
         var older = await _sut.CreateAsync(Request(_showtime, (1, 2)), Ct);
         var cancelled = await _sut.CreateAsync(Request(otherShowtime, (1, 1)), Ct);
-        await _sut.CancelAsync(cancelled.Id, Ct);
+        await _sut.CancelMineAsync(cancelled.Id, Ct);
         _currentUser.As(_admin);
 
         Assert.Equal([first.Id, older.Id], Ids(await _sut.SearchAsync(new(_movie.Id, null, null, null, null), Ct)));

@@ -67,7 +67,8 @@ public sealed class AuthorizationTests(ApiFixture api)
         { Anonymous, "GET", "/api/fee/current", null, HttpStatusCode.Unauthorized },
         { "Client", "GET", "/api/fee/current", null, HttpStatusCode.NoContent },
 
-        // Purchase: compra y "mis compras" solo clientes; el listado de ventas solo staff
+        // Purchase: compra, "mis compras" y cancelar las propias solo clientes; el listado de ventas y
+        // cancelar cualquier compra solo staff
         { Anonymous, "POST", "/api/purchase", PurchaseBody, HttpStatusCode.Unauthorized },
         { "Admin", "POST", "/api/purchase", PurchaseBody, HttpStatusCode.Forbidden },
         { "Client", "POST", "/api/purchase", PurchaseBody, HttpStatusCode.BadRequest },
@@ -77,9 +78,14 @@ public sealed class AuthorizationTests(ApiFixture api)
         { Anonymous, "GET", "/api/purchase", null, HttpStatusCode.Unauthorized },
         { "Client", "GET", "/api/purchase", null, HttpStatusCode.Forbidden },
         { "Admin", "GET", "/api/purchase", null, HttpStatusCode.OK },
+        { "SuperAdmin", "GET", "/api/purchase", null, HttpStatusCode.OK },
+        { Anonymous, "POST", $"/api/purchase/mine/{NoSuchId}/cancel", null, HttpStatusCode.Unauthorized },
+        { "Admin", "POST", $"/api/purchase/mine/{NoSuchId}/cancel", null, HttpStatusCode.Forbidden },
+        { "Client", "POST", $"/api/purchase/mine/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
         { Anonymous, "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.Unauthorized },
-        { "Client", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
+        { "Client", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.Forbidden },
         { "Admin", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
+        { "SuperAdmin", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
     };
 
     [Theory]

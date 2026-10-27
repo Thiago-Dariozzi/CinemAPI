@@ -60,6 +60,9 @@ public sealed class FakeShowtimeRepository(FakeMovieRepository movies) : InMemor
             .OrderBy(s => s.StartTime)
             .ToList());
 
+    public Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct) =>
+        Task.FromResult(Active().Any(s => s.ScreenId == screenId && s.StartTime > after));
+
     public Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Showtime>>(Active()
             .Where(s => s.ScreenId == screenId && s.StartTime >= date.Date && s.StartTime < date.Date.AddDays(1))

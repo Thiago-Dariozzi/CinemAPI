@@ -6,7 +6,8 @@ using WebApi.Security;
 
 namespace WebApi.Controllers;
 
-// Comprar es solo de clientes. Ver una compra o cancelarla: el dueño o el staff (lo decide el servicio).
+// [Authorize] de clase: cliente y staff comparten GET {id}. Los endpoints exclusivos llevan su política.
+// Ver una compra: el dueño o el staff (lo decide el servicio).
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -54,13 +55,26 @@ public sealed class PurchaseController(IPurchaseService purchaseService) : Contr
     }
 
     // POST y no DELETE: la compra no se borra, cambia de estado (y libera las butacas).
-    [HttpPost("{id:guid}/cancel")]
+    // El cliente cancela las suyas hasta 2 h antes de la función.
+    [HttpPost("mine/{id:guid}/cancel")]
+    [Authorize(Policy = Policies.ClientOnly)]
     [ProducesResponseType<PurchaseResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PurchaseResponse>> CancelMyPurchase(Guid id, CancellationToken ct) =>
+        Ok(await purchaseService.CancelMineAsync(id, ct));
+
+    // El staff cancela cualquier compra, sin límite de tiempo.
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = Policies.Staff)]
+    [ProducesResponseType<PurchaseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PurchaseResponse>> CancelPurchase(Guid id, CancellationToken ct) =>
-        Ok(await purchaseService.CancelAsync(id, ct));
+        Ok(await purchaseService.CancelAnyAsync(id, ct));
 }

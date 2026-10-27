@@ -81,12 +81,15 @@ public sealed class ShowtimeService(
     {
         var existing = await GetEntityAsync(id, ct);
         var updated = request.ToEntity(id);
-        // El horario sí se puede correr (reprogramación); la sala y la película no, porque las entradas ya
-        // vendidas dejarían de corresponder a lo que se compró.
-        var changesWhatWasSold = updated.ScreenId != existing.ScreenId || updated.MovieId != existing.MovieId;
+        // Con entradas vendidas no se cambia el horario, la sala ni la película: las entradas dejarían de
+        // corresponder a lo que se compró. El precio sí, porque cada entrada guarda el que pagó.
+        var changesWhatWasSold = updated.ScreenId != existing.ScreenId
+            || updated.MovieId != existing.MovieId
+            || updated.StartTime != existing.StartTime;
         if (changesWhatWasSold && await ticketRepository.HasSoldTicketsAsync(id, ct))
         {
-            throw new ShowtimeConflictException("La función tiene entradas vendidas: no se puede cambiar la sala ni la película.");
+            throw new ShowtimeConflictException(
+                "La función tiene entradas vendidas: no se puede cambiar el horario, la sala ni la película.");
         }
 
         await ValidateNoOverlapAsync(updated, previous: existing, ct);

@@ -257,7 +257,7 @@ public sealed class ShowtimeServiceTests
     }
 
     [Fact]
-    public async Task Update_WithSoldTickets_CannotChangeTheMovie_ButCanBeRescheduled()
+    public async Task Update_WithSoldTickets_CannotChangeTheMovie()
     {
         var otherMovie = new Movie { Id = Guid.NewGuid(), Title = "Otra", DurationMinutes = 90 };
         _movies.Seed(otherMovie);
@@ -265,9 +265,32 @@ public sealed class ShowtimeServiceTests
 
         await Assert.ThrowsAsync<ShowtimeConflictException>(
             () => _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(20)) with { MovieId = otherMovie.Id }), Ct));
+        Assert.Equal(_movie.Id, _existing.MovieId);
+    }
 
+    [Fact]
+    public async Task Update_WithSoldTickets_CannotBeRescheduled_ButCancelledOnesDoNotCount()
+    {
+        var purchase = SeedPurchase(_existing, (1, 1));
+
+        var ex = await Assert.ThrowsAsync<ShowtimeConflictException>(
+            () => _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(16))), Ct));
+        Assert.Contains("horario", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(Day.AddHours(20), _existing.StartTime);
+
+        purchase.Tickets.ForEach(t => t.IsCancelled = true);
         await _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(16))), Ct);
-        Assert.Equal((_movie.Id, Day.AddHours(16)), (_existing.MovieId, _existing.StartTime));
+        Assert.Equal(Day.AddHours(16), _existing.StartTime);
+    }
+
+    [Fact]
+    public async Task Update_WithSoldTickets_CanChangeThePrice()
+    {
+        SeedPurchase(_existing, (1, 1));
+
+        await _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(20)) with { Price = 15m }), Ct);
+
+        Assert.Equal(15m, _existing.Price);
     }
 
     [Fact]

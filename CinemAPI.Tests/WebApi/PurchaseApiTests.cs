@@ -31,7 +31,7 @@ public sealed class PurchaseApiTests(ApiFixture api)
         Assert.Contains(purchaseId, await IdsAsync(asClient, "/api/purchase/mine"));
         Assert.Equal([purchaseId], await IdsAsync(asAdmin, $"/api/purchase?showtimeId={showtimeId}"));
 
-        var cancelled = await asClient.PostAsync($"/api/purchase/{purchaseId}/cancel", content: null);
+        var cancelled = await asClient.PostAsync($"/api/purchase/mine/{purchaseId}/cancel", content: null);
 
         Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
         using var cancelledBody = await ReadJsonAsync(cancelled);
@@ -77,7 +77,7 @@ public sealed class PurchaseApiTests(ApiFixture api)
     }
 
     [Fact]
-    public async Task Cancel_APurchaseOfAnotherClient_Returns403()
+    public async Task Cancel_APurchaseOfAnotherClient_Returns403_ButStaffCancelsItWithItsOwnRoute()
     {
         var showtimeId = await api.CreateShowtimeAsync(Tomorrow);
         using var owner = api.CreateClient(api.ClientToken);
@@ -86,8 +86,13 @@ public sealed class PurchaseApiTests(ApiFixture api)
         using var body = await ReadJsonAsync(created);
         var purchaseId = body.RootElement.GetProperty("id").GetGuid();
 
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsync($"/api/purchase/mine/{purchaseId}/cancel", content: null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsync($"/api/purchase/{purchaseId}/cancel", content: null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync($"/api/purchase/{purchaseId}")).StatusCode);
+
+        using var admin = api.CreateClient(api.TokenFor("Admin"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsync($"/api/purchase/mine/{purchaseId}/cancel", content: null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/purchase/{purchaseId}/cancel", content: null)).StatusCode);
     }
 
     [Fact]

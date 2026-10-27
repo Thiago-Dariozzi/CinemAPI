@@ -9,6 +9,7 @@ namespace Application.Services;
 
 public sealed class ScreenService(
     IScreenRepository screenRepository,
+    IShowtimeRepository showtimeRepository,
     ITicketRepository ticketRepository,
     TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : IScreenService
@@ -47,13 +48,16 @@ public sealed class ScreenService(
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    // Con 0 × 0 butacas cualquier entrada vendida queda "fuera": es la misma consulta que al achicarla.
+    // Una función próxima en una sala dada de baja quedaría sin mapa de butacas. Alcanza con mirar las
+    // funciones: las que tienen entradas vendidas no se pueden borrar ni mover de sala. Una función que ya
+    // empezó no cuenta: sus entradas ya se usaron.
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var screen = await GetEntityAsync(id, ct);
-        if (await ticketRepository.HasSoldSeatsOutsideAsync(id, rows: 0, seatsPerRow: 0, timeProvider.Now(), ct))
+        if (await showtimeRepository.HasUpcomingByScreenAsync(id, timeProvider.Now(), ct))
         {
-            throw new ScreenConflictException("La sala tiene entradas vendidas para funciones próximas: cancelá esas compras antes de darla de baja.");
+            throw new ScreenConflictException(
+                "La sala tiene funciones próximas: borralas antes de darla de baja (si tienen entradas vendidas, cancelá primero esas compras).");
         }
 
         screen.IsActive = false;

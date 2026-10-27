@@ -67,6 +67,22 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
     }
 
     [Fact]
+    public async Task ShowtimeRepository_HasUpcomingByScreen_IgnoresPastAndDeletedShowtimes()
+    {
+        var (_, movie, screen) = await SeedCatalogAsync(durationMinutes: 100);
+        var past = NewShowtime(movie, screen, Day.AddHours(10));
+        var deleted = NewShowtime(movie, screen, Day.AddDays(1));
+        await SaveAsync(past, deleted);
+        await DeactivateAsync<Showtime>(deleted.Id);
+
+        await using var context = database.CreateContext();
+        var repository = new ShowtimeRepository(context);
+
+        Assert.False(await repository.HasUpcomingByScreenAsync(screen.Id, Day.AddHours(10), CancellationToken.None));
+        Assert.True(await repository.HasUpcomingByScreenAsync(screen.Id, Day.AddHours(9), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task UserRepository_EmailExists_CountsDeletedUsers_AndCanExcludeOne()
     {
         var deleted = new User { Id = Guid.NewGuid(), Name = "Baja", Email = $"baja.{Guid.NewGuid():N}@cine.com", PasswordHash = "x", IsActive = false };

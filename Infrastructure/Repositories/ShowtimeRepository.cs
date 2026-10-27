@@ -24,6 +24,9 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
             .OrderBy(s => s.StartTime)
             .ToListAsync(ct);
 
+    public Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct) =>
+        Context.Showtimes.AnyAsync(s => s.ScreenId == screenId && s.StartTime > after, ct);
+
     // Rango [día, día + 1) en vez de StartTime.Date == date: así puede usar el índice (ScreenId, StartTime).
     public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
     {

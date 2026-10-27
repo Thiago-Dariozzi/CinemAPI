@@ -62,10 +62,11 @@ Autenticación: `POST /api/auth/login` devuelve `{ token, expiresAt, user }`; el
 | `POST /api/purchase` | Client | `{ showtimeId, seats: [{ row, number }] }` → 201 con la compra |
 | `GET /api/purchase/mine` | Client | Sus compras con película, sala, horario y butacas |
 | `GET /api/purchase/{id}` | dueño o staff | Una compra (ajena → 403) |
-| `POST /api/purchase/{id}/cancel` | dueño o staff | Cancela y libera las butacas |
+| `POST /api/purchase/mine/{id}/cancel` | Client (dueño) | Cancela una compra propia (hasta 2 h antes) y libera las butacas |
+| `POST /api/purchase/{id}/cancel` | staff | Cancela cualquier compra, sin límite de tiempo |
 | `GET /api/purchase?movieId=&showtimeId=&from=&to=&status=` | staff | Ventas; `from`/`to` son días de compra (incluidos), `status` `Confirmed` o `Cancelled` |
 
-Reglas: la función no empezó, la película está en cartelera, de 1 a 10 butacas que existan en la sala y estén libres (si no, 400 / 409 con las butacas en el mensaje). Total = subtotal + subtotal × `percentage` / 100 + `fixedAmount`, redondeado a centavos y guardado en la compra. El cliente cancela solo lo suyo y mientras falten más de 2 horas; el staff, cualquier compra y en cualquier momento. Las horas son la hora local del cine (la del servidor).
+Reglas: la función no empezó, la película está en cartelera, de 1 a 10 butacas que existan en la sala y estén libres (si no, 400 / 409 con las butacas en el mensaje). Total = subtotal + subtotal × `percentage` / 100 + `fixedAmount`, redondeado a centavos y guardado en la compra. El cliente cancela solo lo suyo y mientras falten más de 2 horas; el staff, cualquier compra y en cualquier momento. Las horas son la hora local del cine (la del servidor). Una función con entradas vendidas no se puede borrar ni cambiar de horario, sala o película (sí de precio), y una sala con funciones próximas no se puede dar de baja (409).
 
 La migración `AddSeatLayoutFeesAndPurchases` convierte la capacidad de cada sala en filas × 10 butacas y pasa los tickets viejos a compras con butaca; los que no tienen ninguna función de su película en su sala (o no entran en ella) se borran. El detalle está en el comentario de la migración.
 

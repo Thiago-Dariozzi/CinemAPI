@@ -112,25 +112,55 @@ public sealed class PurchaseService(
         return (await purchaseRepository.SearchAsync(filter, ct)).Select(p => ToResponse(p, now)).ToList();
     }
 
-    public async Task<PurchaseResponse> CancelAsync(Guid id, CancellationToken ct)
+    // El cliente cancela solo lo suyo y con el límite de 2 h.
+    public async Task<PurchaseResponse> CancelMineAsync(Guid id, CancellationToken ct)
     {
-        var purchase = await purchaseRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
-        EnsureCanAccess(purchase.UserId, "Solo podés cancelar tus propias compras.");
+        var purchase = await GetPurchaseAsync(id, ct);
+        if (purchase.UserId != currentUser.Id)
+        {
+            throw new ForbiddenException("Solo podés cancelar tus propias compras.");
+        }
+
+        EnsureNotCancelled(purchase);
+
+        var now = timeProvider.Now();
+        var showtime = await showtimeRepository.GetByIdAsync(purchase.ShowtimeId, ct);
+        if (showtime is null || !IsBeforeClientDeadline(showtime.StartTime, now))
+        {
+            throw new BusinessRuleException("Las compras se pueden cancelar hasta 2 horas antes de la función.");
+        }
+
+        return await CancelAsync(purchase, now, ct);
+    }
+
+    // El staff cancela cualquier compra, sin límite de tiempo. La política del endpoint ya lo exige;
+    // el servicio lo vuelve a verificar para no depender solo de la ruta.
+    public async Task<PurchaseResponse> CancelAnyAsync(Guid id, CancellationToken ct)
+    {
+        if (!IsStaff)
+        {
+            throw new ForbiddenException("Solo el staff puede cancelar compras de otros clientes.");
+        }
+
+        var purchase = await GetPurchaseAsync(id, ct);
+        EnsureNotCancelled(purchase);
+        return await CancelAsync(purchase, timeProvider.Now(), ct);
+    }
+
+    private async Task<Purchase> GetPurchaseAsync(Guid id, CancellationToken ct) =>
+        await purchaseRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    // Va después de verificar el dueño: a un cliente, el 409 de una compra ajena le revelaría que existe.
+    private static void EnsureNotCancelled(Purchase purchase)
+    {
         if (purchase.IsCancelled)
         {
             throw new PurchaseConflictException("La compra ya estaba cancelada.");
         }
+    }
 
-        var now = timeProvider.Now();
-        if (!IsStaff)
-        {
-            var showtime = await showtimeRepository.GetByIdAsync(purchase.ShowtimeId, ct);
-            if (showtime is null || !IsBeforeClientDeadline(showtime.StartTime, now))
-            {
-                throw new BusinessRuleException("Las compras se pueden cancelar hasta 2 horas antes de la función.");
-            }
-        }
-
+    private async Task<PurchaseResponse> CancelAsync(Purchase purchase, DateTime now, CancellationToken ct)
+    {
         purchase.Status = PurchaseStatus.Cancelled;
         purchase.CancelledAt = now;
         foreach (var ticket in purchase.Tickets)
@@ -139,7 +169,7 @@ public sealed class PurchaseService(
         }
 
         await unitOfWork.SaveChangesAsync(ct);
-        return await GetResponseAsync(id, now, ct);
+        return await GetResponseAsync(purchase.Id, now, ct);
     }
 
     private static void EnsureSeatCount(List<Seat> seats)
