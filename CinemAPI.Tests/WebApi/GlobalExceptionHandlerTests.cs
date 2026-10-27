@@ -14,6 +14,8 @@ public sealed class GlobalExceptionHandlerTests
     [InlineData(typeof(ShowtimeConflictException), 409, "Conflicto")]
     [InlineData(typeof(UserConflictException), 409, "Conflicto")]
     [InlineData(typeof(UniqueConstraintConflictException), 409, "Conflicto")]
+    [InlineData(typeof(PurchaseConflictException), 409, "Conflicto")]
+    [InlineData(typeof(ScreenConflictException), 409, "Conflicto")]
     [InlineData(typeof(InvalidCredentialsException), 401, "No autenticado")]
     [InlineData(typeof(ForbiddenException), 403, "Acceso denegado")]
     [InlineData(typeof(BusinessRuleException), 400, "Regla de negocio no cumplida")]

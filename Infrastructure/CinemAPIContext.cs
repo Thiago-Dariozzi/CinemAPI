@@ -14,6 +14,8 @@ public sealed class CinemAPIContext(DbContextOptions<CinemAPIContext> options) :
     public DbSet<User> Users => Set<User>();
     public DbSet<Showtime> Showtimes => Set<Showtime>();
     public DbSet<Genre> Genres => Set<Genre>();
+    public DbSet<Fee> Fees => Set<Fee>();
+    public DbSet<Purchase> Purchases => Set<Purchase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

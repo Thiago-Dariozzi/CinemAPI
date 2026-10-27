@@ -7,7 +7,11 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
-public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWork unitOfWork) : IScreenService
+public sealed class ScreenService(
+    IScreenRepository screenRepository,
+    ITicketRepository ticketRepository,
+    TimeProvider timeProvider,
+    IUnitOfWork unitOfWork) : IScreenService
 {
     private const string EntityName = "la sala";
 
@@ -27,16 +31,31 @@ public sealed class ScreenService(IScreenRepository screenRepository, IUnitOfWor
         return screen.ToResponse();
     }
 
+    // Achicar la sala no puede dejar sin butaca a quien ya compró para una función que no pasó.
     public async Task UpdateAsync(Guid id, UpdateScreenRequest request, CancellationToken ct)
     {
         var screen = await GetEntityAsync(id, ct);
+        var shrinks = request.Rows < screen.Rows || request.SeatsPerRow < screen.SeatsPerRow;
+        if (shrinks && await ticketRepository.HasSoldSeatsOutsideAsync(id, request.Rows, request.SeatsPerRow, timeProvider.Now(), ct))
+        {
+            throw new ScreenConflictException(
+                "Hay entradas vendidas para funciones próximas en butacas que quedarían fuera de la sala. " +
+                "Cancelá esas compras o mantené el tamaño.");
+        }
+
         request.ApplyTo(screen);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    // Con 0 × 0 butacas cualquier entrada vendida queda "fuera": es la misma consulta que al achicarla.
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var screen = await GetEntityAsync(id, ct);
+        if (await ticketRepository.HasSoldSeatsOutsideAsync(id, rows: 0, seatsPerRow: 0, timeProvider.Now(), ct))
+        {
+            throw new ScreenConflictException("La sala tiene entradas vendidas para funciones próximas: cancelá esas compras antes de darla de baja.");
+        }
+
         screen.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }

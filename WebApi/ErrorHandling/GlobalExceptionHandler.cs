@@ -21,7 +21,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
             InvalidCredentialsException => (StatusCodes.Status401Unauthorized, "No autenticado"),
             ForbiddenException => (StatusCodes.Status403Forbidden, "Acceso denegado"),
             InvalidReferenceException => (StatusCodes.Status400BadRequest, "Referencia inválida"),
-            GenreConflictException or ShowtimeConflictException or UserConflictException or UniqueConstraintConflictException =>
+            ConflictException =>
                 (StatusCodes.Status409Conflict, "Conflicto"),
             _ => (StatusCodes.Status400BadRequest, "Regla de negocio no cumplida"),
         };

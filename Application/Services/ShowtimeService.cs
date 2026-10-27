@@ -8,11 +8,14 @@ using Domain.Interfaces;
 namespace Application.Services;
 
 // Orquesta IShowtimeRepository + IMovieRepository (necesito la duración de la
-// película para calcular solapamientos) + IScreenRepository (la sala tiene que existir).
+// película para calcular solapamientos) + IScreenRepository (la sala tiene que existir)
+// + ITicketRepository (butacas vendidas: el mapa y lo que no se puede tocar de una función con ventas).
 public sealed class ShowtimeService(
     IShowtimeRepository showtimeRepository,
     IMovieRepository movieRepository,
     IScreenRepository screenRepository,
+    ITicketRepository ticketRepository,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : IShowtimeService
 {
     private const string EntityName = "la función";
@@ -26,10 +29,38 @@ public sealed class ShowtimeService(
     public async Task<IReadOnlyList<ShowtimeResponse>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
         ToResponses(await showtimeRepository.GetByMovieIdAsync(movieId, ct));
 
+    // Las que todavía no empezaron, de una película o de todas. No mira si la película está en cartelera:
+    // eso lo informa el mapa de butacas (IsOnSale) y lo valida la compra.
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetUpcomingAsync(Guid? movieId, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetUpcomingAsync(movieId, timeProvider.Now(), ct));
+
     // Cartelera de una sala en un día (la usa el calendario del front).
     public async Task<IReadOnlyList<ShowtimeResponse>> GetByScreenAndDateAsync(
         Guid screenId, DateOnly date, CancellationToken ct) =>
         ToResponses(await showtimeRepository.GetByScreenAndDateAsync(screenId, date.ToDateTime(TimeOnly.MinValue), ct));
+
+    public async Task<SeatMapResponse> GetSeatMapAsync(Guid id, CancellationToken ct)
+    {
+        var showtime = await GetEntityAsync(id, ct);
+        var screen = await screenRepository.GetByIdAsync(showtime.ScreenId, ct)
+            ?? throw new BusinessRuleException("La sala de esta función no está disponible.");
+        var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct);
+        var taken = await ticketRepository.GetTakenSeatsAsync(id, ct);
+        var isOnSale = movie is { IsShowing: true } && showtime.StartTime > timeProvider.Now();
+
+        return new SeatMapResponse(
+            showtime.Id,
+            showtime.MovieId,
+            movie?.Title ?? "Película no disponible",
+            screen.Id,
+            screen.Name,
+            showtime.StartTime,
+            showtime.Price,
+            screen.Rows,
+            screen.SeatsPerRow,
+            isOnSale,
+            taken.Select(s => new SeatResponse(s.Row, s.Number)).ToList());
+    }
 
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
     public async Task<ShowtimeResponse> CreateAsync(CreateShowtimeRequest request, CancellationToken ct)
@@ -50,6 +81,13 @@ public sealed class ShowtimeService(
     {
         var existing = await GetEntityAsync(id, ct);
         var updated = request.ToEntity(id);
+        // El horario sí se puede correr (reprogramación); la sala y la película no, porque las entradas ya
+        // vendidas dejarían de corresponder a lo que se compró.
+        var changesWhatWasSold = updated.ScreenId != existing.ScreenId || updated.MovieId != existing.MovieId;
+        if (changesWhatWasSold && await ticketRepository.HasSoldTicketsAsync(id, ct))
+        {
+            throw new ShowtimeConflictException("La función tiene entradas vendidas: no se puede cambiar la sala ni la película.");
+        }
 
         await ValidateNoOverlapAsync(updated, previous: existing, ct);
 
@@ -64,6 +102,11 @@ public sealed class ShowtimeService(
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var showtime = await GetEntityAsync(id, ct);
+        if (await ticketRepository.HasSoldTicketsAsync(id, ct))
+        {
+            throw new ShowtimeConflictException("La función tiene entradas vendidas: cancelá esas compras antes de borrarla.");
+        }
+
         showtime.IsActive = false;
         await unitOfWork.SaveChangesAsync(ct);
     }

@@ -11,6 +11,9 @@ public sealed class ScreenConfiguration : IEntityTypeConfiguration<Screen>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Name).IsRequired().HasMaxLength(50);
 
+        // Se calcula con Rows × SeatsPerRow.
+        builder.Ignore(e => e.Capacity);
+
         builder.HasQueryFilter(e => e.IsActive);
     }
 }

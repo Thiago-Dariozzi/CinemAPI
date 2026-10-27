@@ -6,4 +6,4 @@ namespace Domain.Exceptions;
 /// Si llega al handler global, se traduce a 409 (Conflict), nunca a un 500.
 /// </summary>
 public sealed class UniqueConstraintConflictException(Exception innerException)
-    : DomainException("Ya existe un registro con esos datos.", innerException);
+    : ConflictException("Ya existe un registro con esos datos.", innerException);

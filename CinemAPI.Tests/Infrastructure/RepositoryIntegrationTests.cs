@@ -49,6 +49,23 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         Assert.Equal((150, deletedMovie.Title), (occupancy[1].DurationMinutes, occupancy[1].MovieTitle));
     }
 
+    // IgnoreQueryFilters (para las películas dadas de baja) apaga los filtros de toda la consulta: una
+    // función borrada no puede seguir ocupando la sala.
+    [Fact]
+    public async Task ShowtimeRepository_GetOccupancy_IgnoresDeletedShowtimes()
+    {
+        var (_, movie, screen) = await SeedCatalogAsync(durationMinutes: 100);
+        var deleted = NewShowtime(movie, screen, Day.AddHours(10));
+        await SaveAsync(deleted);
+        await DeactivateAsync<Showtime>(deleted.Id);
+
+        await using var context = database.CreateContext();
+        var occupancy = await new ShowtimeRepository(context)
+            .GetOccupancyByScreenAsync(screen.Id, Day, Day.AddDays(1), CancellationToken.None);
+
+        Assert.Empty(occupancy);
+    }
+
     [Fact]
     public async Task UserRepository_EmailExists_CountsDeletedUsers_AndCanExcludeOne()
     {
@@ -86,12 +103,12 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await using (var context = database.CreateContext())
         {
             var tracked = await new ScreenRepository(context).GetByIdAsync(screen.Id, CancellationToken.None);
-            tracked!.Capacity = 321;
+            tracked!.Rows = 21;
             await context.SaveChangesAsync();
         }
 
         await using var verify = database.CreateContext();
-        Assert.Equal(321, (await new ScreenRepository(verify).GetByIdAsync(screen.Id, CancellationToken.None))!.Capacity);
+        Assert.Equal(21, (await new ScreenRepository(verify).GetByIdAsync(screen.Id, CancellationToken.None))!.Rows);
     }
 
     [Fact]
@@ -171,7 +188,7 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var genre = new Genre { Id = Guid.NewGuid(), Name = $"Género {suffix}" };
         var movie = new Movie { Id = Guid.NewGuid(), Title = $"Película {suffix}", GenreId = genre.Id, DurationMinutes = durationMinutes };
-        var screen = new Screen { Id = Guid.NewGuid(), Name = $"Sala {suffix}", Capacity = 100 };
+        var screen = new Screen { Id = Guid.NewGuid(), Name = $"Sala {suffix}", Rows = 10, SeatsPerRow = 10 };
         await SaveAsync(genre, movie, screen);
         return (genre, movie, screen);
     }

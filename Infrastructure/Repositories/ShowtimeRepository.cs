@@ -18,6 +18,12 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
             .OrderBy(s => s.StartTime)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Showtime>> GetUpcomingAsync(Guid? movieId, DateTime after, CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .Where(s => s.StartTime > after && (movieId == null || s.MovieId == movieId))
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(ct);
+
     // Rango [día, día + 1) en vez de StartTime.Date == date: así puede usar el índice (ScreenId, StartTime).
     public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
     {
@@ -31,11 +37,13 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
 
     // IgnoreQueryFilters en películas a propósito: si la película se dio de baja pero la función
     // sigue activa, la sala sigue ocupada durante toda su duración. La FK garantiza que existe.
+    // IgnoreQueryFilters apaga los filtros de TODA la consulta, así que s.IsActive va explícito: sin él,
+    // una función borrada seguía bloqueando la sala.
     public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAsync(
         Guid screenId, DateTime from, DateTime to, CancellationToken ct)
     {
         var rows = await Context.Showtimes.AsNoTracking()
-            .Where(s => s.ScreenId == screenId && s.StartTime >= from && s.StartTime < to)
+            .Where(s => s.IsActive && s.ScreenId == screenId && s.StartTime >= from && s.StartTime < to)
             .OrderBy(s => s.StartTime)
             .Join(Context.Movies.IgnoreQueryFilters(), s => s.MovieId, m => m.Id, (s, m) => new
             {

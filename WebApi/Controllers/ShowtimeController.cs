@@ -25,6 +25,21 @@ public sealed class ShowtimeController(IShowtimeService showtimeService) : Contr
     public async Task<ActionResult<ShowtimeResponse>> GetShowtime(Guid id, CancellationToken ct) =>
         Ok(await showtimeService.GetByIdAsync(id, ct));
 
+    // GET api/showtime/upcoming?movieId=...: las que todavía no empezaron.
+    [AllowAnonymous]
+    [HttpGet("upcoming")]
+    [ProducesResponseType<IReadOnlyList<ShowtimeResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ShowtimeResponse>>> GetUpcoming([FromQuery] Guid? movieId, CancellationToken ct) =>
+        Ok(await showtimeService.GetUpcomingAsync(movieId, ct));
+
+    // Mapa de butacas de la función: tamaño de la sala y butacas vendidas.
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/seats")]
+    [ProducesResponseType<SeatMapResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SeatMapResponse>> GetSeats(Guid id, CancellationToken ct) =>
+        Ok(await showtimeService.GetSeatMapAsync(id, ct));
+
     // Todas las funciones de una película, sin importar sala ni fecha.
     [AllowAnonymous]
     [HttpGet("movie/{movieId:guid}")]
@@ -73,6 +88,7 @@ public sealed class ShowtimeController(IShowtimeService showtimeService) : Contr
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteShowtime(Guid id, CancellationToken ct)

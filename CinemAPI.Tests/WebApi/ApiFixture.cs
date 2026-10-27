@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CinemAPI.Tests.Infrastructure;
+using Domain.Entities;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using WebApi.Controllers;
@@ -83,6 +84,21 @@ public sealed class ApiFixture : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return (body.RootElement.GetProperty("token").GetString()!, body.RootElement.GetProperty("user").GetProperty("id").GetGuid());
+    }
+
+    // Una función lista para vender (película en cartelera, sala de rows × seatsPerRow), cargada directo
+    // en la base para no depender de los endpoints del catálogo.
+    public async Task<Guid> CreateShowtimeAsync(DateTime startTime, int rows = 5, int seatsPerRow = 10, decimal price = 10m)
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var genre = new Genre { Id = Guid.NewGuid(), Name = $"Género {suffix}" };
+        var movie = new Movie { Id = Guid.NewGuid(), Title = $"Película {suffix}", GenreId = genre.Id, DurationMinutes = 100, IsShowing = true };
+        var screen = new Screen { Id = Guid.NewGuid(), Name = $"Sala {suffix}", Rows = rows, SeatsPerRow = seatsPerRow };
+        var showtime = new Showtime { Id = Guid.NewGuid(), MovieId = movie.Id, ScreenId = screen.Id, StartTime = startTime, Price = price };
+        await using var context = _database.CreateContext();
+        context.AddRange(genre, movie, screen, showtime);
+        await context.SaveChangesAsync();
+        return showtime.Id;
     }
 
     public static string UniqueEmail(string prefix) => $"{prefix}.{Guid.NewGuid():N}@cine.test";

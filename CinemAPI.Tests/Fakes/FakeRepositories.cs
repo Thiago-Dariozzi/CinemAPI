@@ -27,12 +27,6 @@ public sealed class FakeUserRepository : InMemoryRepository<User>, IUserReposito
     private static bool SameEmail(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed class FakeTicketRepository : InMemoryRepository<Ticket>, ITicketRepository
-{
-    public Task<IReadOnlyList<Ticket>> GetByUserIdAsync(Guid userId, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<Ticket>>(Active().Where(t => t.UserId == userId).ToList());
-}
-
 public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepository
 {
     public Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
@@ -60,6 +54,12 @@ public sealed class FakeShowtimeRepository(FakeMovieRepository movies) : InMemor
     public Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Showtime>>(Active().Where(s => s.MovieId == movieId).OrderBy(s => s.StartTime).ToList());
 
+    public Task<IReadOnlyList<Showtime>> GetUpcomingAsync(Guid? movieId, DateTime after, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Showtime>>(Active()
+            .Where(s => s.StartTime > after && (movieId is null || s.MovieId == movieId))
+            .OrderBy(s => s.StartTime)
+            .ToList());
+
     public Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Showtime>>(Active()
             .Where(s => s.ScreenId == screenId && s.StartTime >= date.Date && s.StartTime < date.Date.AddDays(1))
@@ -77,4 +77,85 @@ public sealed class FakeShowtimeRepository(FakeMovieRepository movies) : InMemor
             .Select(s => new ShowtimeOccupancy(s.Id, s.StartTime, allMovies[s.MovieId].DurationMinutes, allMovies[s.MovieId].Title))
             .ToList());
     }
+}
+
+// Las entradas viven dentro de las compras, como en la base: se leen de FakePurchaseRepository.
+public sealed class FakeTicketRepository(FakePurchaseRepository purchases, FakeShowtimeRepository showtimes) : ITicketRepository
+{
+    public Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Ticket>>(Active().ToList());
+
+    public Task<Ticket?> GetByIdAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult(Active().FirstOrDefault(t => t.Id == id));
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct) => Task.FromResult(Active().Any(t => t.Id == id));
+
+    public void Add(Ticket entity) => throw new NotSupportedException("Las entradas se agregan dentro de una compra.");
+
+    public Task<IReadOnlyList<Seat>> GetTakenSeatsAsync(Guid showtimeId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Seat>>(Sold()
+            .Where(t => t.ShowtimeId == showtimeId)
+            .OrderBy(t => t.SeatRow).ThenBy(t => t.SeatNumber)
+            .Select(t => new Seat(t.SeatRow, t.SeatNumber))
+            .ToList());
+
+    public Task<bool> HasSoldTicketsAsync(Guid showtimeId, CancellationToken ct) =>
+        Task.FromResult(Sold().Any(t => t.ShowtimeId == showtimeId));
+
+    public Task<bool> HasSoldSeatsOutsideAsync(Guid screenId, int rows, int seatsPerRow, DateTime after, CancellationToken ct)
+    {
+        var showtimeById = showtimes.Stored.Where(s => s.IsActive).ToDictionary(s => s.Id);
+        return Task.FromResult(Sold().Any(t =>
+            showtimeById.TryGetValue(t.ShowtimeId, out var s) && s.ScreenId == screenId && s.StartTime > after
+            && (t.SeatRow > rows || t.SeatNumber > seatsPerRow)));
+    }
+
+    // Como el filtro global de Tickets: solo mira la entrada (no la compra), igual que TicketRepository.
+    private IEnumerable<Ticket> Active() =>
+        purchases.Stored.SelectMany(p => p.Tickets).Where(t => t.IsActive);
+
+    private IEnumerable<Ticket> Sold() => Active().Where(t => !t.IsCancelled);
+}
+
+public sealed class FakeFeeRepository : InMemoryRepository<Fee>, IFeeRepository
+{
+    public Task<Fee?> GetCurrentAsync(CancellationToken ct) => Task.FromResult(Active().FirstOrDefault(f => f.IsCurrent));
+}
+
+// Arma los detalles con los datos de los otros fakes, incluidos los dados de baja (como el join real).
+public sealed class FakePurchaseRepository(
+    FakeShowtimeRepository showtimes,
+    FakeMovieRepository movies,
+    FakeScreenRepository screens,
+    FakeUserRepository users) : InMemoryRepository<Purchase>, IPurchaseRepository
+{
+    public Task<PurchaseDetails?> GetDetailsAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult(Details().FirstOrDefault(p => p.Id == id));
+
+    public Task<IReadOnlyList<PurchaseDetails>> GetByUserAsync(Guid userId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<PurchaseDetails>>(Details().Where(p => p.UserId == userId).OrderByDescending(p => p.StartTime).ToList());
+
+    public Task<IReadOnlyList<PurchaseDetails>> SearchAsync(PurchaseFilter filter, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<PurchaseDetails>>(Details()
+            .Where(p => filter.MovieId is null || p.MovieId == filter.MovieId)
+            .Where(p => filter.ShowtimeId is null || p.ShowtimeId == filter.ShowtimeId)
+            .Where(p => filter.From is null || p.CreatedAt >= filter.From)
+            .Where(p => filter.To is null || p.CreatedAt < filter.To)
+            .Where(p => string.IsNullOrEmpty(filter.Status) || p.Status == filter.Status)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToList());
+
+    private IEnumerable<PurchaseDetails> Details() => Active().Select(p =>
+    {
+        var showtime = showtimes.Stored.Single(s => s.Id == p.ShowtimeId);
+        var movie = movies.Stored.Single(m => m.Id == showtime.MovieId);
+        var screen = screens.Stored.Single(s => s.Id == showtime.ScreenId);
+        var user = users.Stored.FirstOrDefault(u => u.Id == p.UserId);
+        return new PurchaseDetails(
+            p.Id, p.UserId, user?.Name ?? string.Empty, user?.Email ?? string.Empty,
+            showtime.Id, showtime.StartTime, movie.Id, movie.Title, screen.Id, screen.Name,
+            p.CreatedAt, p.Subtotal, p.FeeAmount, p.Total, p.Status, p.CancelledAt,
+            p.Tickets.Where(t => t.IsActive).OrderBy(t => t.SeatRow).ThenBy(t => t.SeatNumber)
+                .Select(t => new PurchasedSeat(t.Id, t.SeatRow, t.SeatNumber, t.Price)).ToList());
+    });
 }

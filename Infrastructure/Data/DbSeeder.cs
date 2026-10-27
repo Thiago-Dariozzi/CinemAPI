@@ -40,7 +40,8 @@ public static class DbSeeder
             var screenFaker = new Faker<Screen>("es")
                 .RuleFor(s => s.Id, f => Guid.NewGuid())
                 .RuleFor(s => s.Name, f => $"Sala {f.IndexFaker + 1}")
-                .RuleFor(s => s.Capacity, f => f.Random.Int(20, 300))
+                .RuleFor(s => s.Rows, f => f.Random.Int(6, 15))
+                .RuleFor(s => s.SeatsPerRow, f => f.Random.Int(8, 20))
                 .RuleFor(s => s.IsActive, f => true);
             screens = screenFaker.Generate(20);
 
@@ -71,20 +72,6 @@ public static class DbSeeder
             await context.Movies.AddRangeAsync(movies, ct);
             await context.Users.AddRangeAsync(users, ct);
             await context.SaveChangesAsync(ct);
-
-            // --- Tickets (dependen de los IDs ya generados arriba) ---
-            var ticketFaker = new Faker<Ticket>("es")
-                .RuleFor(t => t.Id, f => Guid.NewGuid())
-                .RuleFor(t => t.MovieId, f => f.PickRandom(movies).Id)
-                .RuleFor(t => t.ScreenId, f => f.PickRandom(screens).Id)
-                .RuleFor(t => t.UserId, f => f.PickRandom(users).Id)
-                .RuleFor(t => t.BuyDate, f => f.Date.Recent(60))
-                .RuleFor(t => t.FinalPrice, f => f.Random.Decimal(5, 25))
-                .RuleFor(t => t.IsActive, f => true);
-            var tickets = ticketFaker.Generate(50);
-
-            await context.Tickets.AddRangeAsync(tickets, ct);
-            await context.SaveChangesAsync(ct);
         }
         else
         {
@@ -99,12 +86,96 @@ public static class DbSeeder
         }
 
         // --- Showtimes (funciones) ---
-        if (!await context.Showtimes.IgnoreQueryFilters().AnyAsync(ct) && movies.Count > 0 && screens.Count > 0)
+        // Si no queda ninguna función por delante (base nueva o con funciones vencidas) se generan nuevas:
+        // sin eso no hay nada para comprar.
+        if (!await context.Showtimes.AnyAsync(s => s.StartTime > DateTime.Now, ct) && movies.Count > 0 && screens.Count > 0)
         {
             var showtimes = GenerateShowtimes(movies, screens);
             await context.Showtimes.AddRangeAsync(showtimes, ct);
             await context.SaveChangesAsync(ct);
         }
+
+        await SeedFeeAsync(context, ct);
+        await SeedPurchasesAsync(context, ct);
+    }
+
+    // Un cargo vigente de ejemplo para que el resumen de compra muestre subtotal + cargo + total.
+    private static async Task SeedFeeAsync(CinemAPIContext context, CancellationToken ct)
+    {
+        if (await context.Fees.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            return;
+        }
+
+        context.Fees.Add(new Fee { Id = Guid.NewGuid(), Name = "Cargo por servicio", Percentage = 10m, FixedAmount = 0m, IsCurrent = true, IsActive = true });
+        await context.SaveChangesAsync(ct);
+    }
+
+    // Compras de clientes al azar en funciones próximas para que los mapas de butacas tengan lugares ocupados y Ventas tenga
+    // datos. Cada compra toma butacas libres de su función y respeta el cálculo de PurchaseService.
+    private static async Task SeedPurchasesAsync(CinemAPIContext context, CancellationToken ct)
+    {
+        const int PurchaseCount = 60;
+
+        var upcoming = context.Showtimes.Where(s => s.StartTime > DateTime.Now);
+        if (await context.Purchases.AnyAsync(p => upcoming.Any(s => s.Id == p.ShowtimeId), ct))
+        {
+            return;
+        }
+
+        var clients = await context.Users.Where(u => u.Role == Roles.Client).Select(u => u.Id).ToListAsync(ct);
+        var showtimes = await upcoming.ToListAsync(ct);
+        var screens = await context.Screens.ToDictionaryAsync(s => s.Id, ct);
+        var fee = await context.Fees.FirstOrDefaultAsync(f => f.IsCurrent, ct);
+        showtimes = showtimes.Where(s => screens.ContainsKey(s.ScreenId)).ToList();
+        if (clients.Count == 0 || showtimes.Count == 0)
+        {
+            return;
+        }
+
+        var faker = new Faker("es");
+        var taken = new HashSet<(Guid ShowtimeId, int Row, int Number)>();
+        for (var i = 0; i < PurchaseCount; i++)
+        {
+            var showtime = faker.PickRandom(showtimes);
+            var screen = screens[showtime.ScreenId];
+            var row = faker.Random.Int(1, screen.Rows);
+            var first = faker.Random.Int(1, screen.SeatsPerRow);
+            var seats = Enumerable.Range(first, faker.Random.Int(1, 4))
+                .Where(n => n <= screen.SeatsPerRow && taken.Add((showtime.Id, row, n)))
+                .ToList();
+            if (seats.Count == 0)
+            {
+                continue;
+            }
+
+            var subtotal = showtime.Price * seats.Count;
+            var feeAmount = fee?.CalculateFor(subtotal) ?? 0m;
+            var purchaseId = Guid.NewGuid();
+            context.Purchases.Add(new Purchase
+            {
+                Id = purchaseId,
+                UserId = faker.PickRandom(clients),
+                ShowtimeId = showtime.Id,
+                CreatedAt = DateTime.Now.AddDays(-faker.Random.Int(0, 10)).AddMinutes(-faker.Random.Int(0, 600)),
+                Subtotal = subtotal,
+                FeeId = fee?.Id,
+                FeeAmount = feeAmount,
+                Total = subtotal + feeAmount,
+                Status = PurchaseStatus.Confirmed,
+                Tickets = seats.Select(n => new Ticket
+                {
+                    Id = Guid.NewGuid(),
+                    PurchaseId = purchaseId,
+                    ShowtimeId = showtime.Id,
+                    SeatRow = row,
+                    SeatNumber = n,
+                    Price = showtime.Price,
+                }).ToList(),
+            });
+        }
+
+        await context.SaveChangesAsync(ct);
     }
 
     // Un usuario demo por rol de staff y uno cliente (el SuperAdmin sale de SeedSuperAdmin). Si ya existe
@@ -143,8 +214,8 @@ public static class DbSeeder
                         Id = Guid.NewGuid(),
                         MovieId = movie.Id,
                         ScreenId = faker.PickRandom(screens).Id,
-                        StartTime = faker.Date.Soon(14).Date.AddHours(faker.Random.Int(12, 22)),
-                        Price = faker.Random.Decimal(5, 25),
+                        StartTime = DateTime.Today.AddDays(faker.Random.Int(1, 14)).AddHours(faker.Random.Int(12, 22)),
+                        Price = Math.Round(faker.Random.Decimal(5, 25), 2),
                         IsActive = true,
                     };
                     var candidateEnd = candidate.StartTime.AddMinutes(durations[movie.Id]);

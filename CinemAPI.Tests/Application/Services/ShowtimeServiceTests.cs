@@ -14,6 +14,9 @@ public sealed class ShowtimeServiceTests
     private readonly FakeShowtimeRepository _showtimes;
     private readonly FakeMovieRepository _movies = new();
     private readonly FakeScreenRepository _screens = new();
+    private readonly FakeUserRepository _users = new();
+    private readonly FakePurchaseRepository _purchases;
+    private readonly FixedTimeProvider _clock = new(Day.AddDays(-1));
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly ShowtimeService _sut;
 
@@ -26,10 +29,11 @@ public sealed class ShowtimeServiceTests
     public ShowtimeServiceTests()
     {
         _showtimes = new FakeShowtimeRepository(_movies);
+        _purchases = new FakePurchaseRepository(_showtimes, _movies, _screens, _users);
         _movies.Seed(_movie);
-        _screens.Seed(new Screen { Id = _screenId, Name = "Sala 1", Capacity = 100 });
+        _screens.Seed(new Screen { Id = _screenId, Name = "Sala 1", Rows = 10, SeatsPerRow = 10 });
         _existing = SeedShowtime(Day.AddHours(20));
-        _sut = new ShowtimeService(_showtimes, _movies, _screens, _unitOfWork);
+        _sut = new ShowtimeService(_showtimes, _movies, _screens, new FakeTicketRepository(_purchases, _showtimes), _clock, _unitOfWork);
     }
 
     [Theory]
@@ -68,7 +72,7 @@ public sealed class ShowtimeServiceTests
     [Fact]
     public async Task Create_WhenSameTimeOnAnotherScreen_DoesNotConflict()
     {
-        var otherScreen = new Screen { Id = Guid.NewGuid(), Name = "Sala 2", Capacity = 50 };
+        var otherScreen = new Screen { Id = Guid.NewGuid(), Name = "Sala 2", Rows = 5, SeatsPerRow = 10 };
         _screens.Seed(otherScreen);
         var request = NewRequest(Day.AddHours(20)) with { ScreenId = otherScreen.Id };
 
@@ -226,6 +230,89 @@ public sealed class ShowtimeServiceTests
         _existing.IsActive = false;
 
         await Assert.ThrowsAsync<NotFoundException>(() => _sut.DeleteAsync(_existing.Id, Ct));
+    }
+
+    [Fact]
+    public async Task Delete_WithSoldTickets_ThrowsConflict_ButCancelledOnesDoNotCount()
+    {
+        var purchase = SeedPurchase(_existing, (1, 1));
+
+        await Assert.ThrowsAsync<ShowtimeConflictException>(() => _sut.DeleteAsync(_existing.Id, Ct));
+
+        purchase.Tickets.ForEach(t => t.IsCancelled = true);
+        await _sut.DeleteAsync(_existing.Id, Ct);
+        Assert.False(_existing.IsActive);
+    }
+
+    [Fact]
+    public async Task Update_ToAnotherScreen_WithSoldTickets_ThrowsConflict()
+    {
+        var otherScreen = new Screen { Id = Guid.NewGuid(), Name = "Sala 2", Rows = 5, SeatsPerRow = 10 };
+        _screens.Seed(otherScreen);
+        SeedPurchase(_existing, (1, 1));
+
+        await Assert.ThrowsAsync<ShowtimeConflictException>(
+            () => _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(20)) with { ScreenId = otherScreen.Id }), Ct));
+        Assert.Equal(_screenId, _existing.ScreenId);
+    }
+
+    [Fact]
+    public async Task Update_WithSoldTickets_CannotChangeTheMovie_ButCanBeRescheduled()
+    {
+        var otherMovie = new Movie { Id = Guid.NewGuid(), Title = "Otra", DurationMinutes = 90 };
+        _movies.Seed(otherMovie);
+        SeedPurchase(_existing, (1, 1));
+
+        await Assert.ThrowsAsync<ShowtimeConflictException>(
+            () => _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(20)) with { MovieId = otherMovie.Id }), Ct));
+
+        await _sut.UpdateAsync(_existing.Id, ToUpdate(NewRequest(Day.AddHours(16))), Ct);
+        Assert.Equal((_movie.Id, Day.AddHours(16)), (_existing.MovieId, _existing.StartTime));
+    }
+
+    [Fact]
+    public async Task GetSeatMap_ReturnsTheLayoutAndOnlyTheSoldSeats()
+    {
+        SeedPurchase(_existing, (2, 3), (2, 4));
+        SeedPurchase(_existing, (5, 5)).Tickets.ForEach(t => t.IsCancelled = true);
+
+        var map = await _sut.GetSeatMapAsync(_existing.Id, Ct);
+
+        Assert.Equal((10, 10, 10m, true), (map.Rows, map.SeatsPerRow, map.Price, map.IsOnSale));
+        Assert.Equal([(2, 3), (2, 4)], map.TakenSeats.Select(s => (s.Row, s.Number)));
+    }
+
+    [Fact]
+    public async Task GetSeatMap_OfAStartedShowtime_IsNotOnSale()
+    {
+        _clock.Now = _existing.StartTime;
+
+        Assert.False((await _sut.GetSeatMapAsync(_existing.Id, Ct)).IsOnSale);
+    }
+
+    [Fact]
+    public async Task GetUpcoming_ReturnsOnlyShowtimesThatHaveNotStarted()
+    {
+        var past = SeedShowtime(Day.AddDays(-2));
+
+        var result = await _sut.GetUpcomingAsync(_movie.Id, Ct);
+
+        Assert.Equal([_existing.Id], result.Select(s => s.Id));
+        Assert.DoesNotContain(result, s => s.Id == past.Id);
+    }
+
+    private Purchase SeedPurchase(Showtime showtime, params (int Row, int Number)[] seats)
+    {
+        var purchaseId = Guid.NewGuid();
+        var purchase = new Purchase
+        {
+            Id = purchaseId,
+            UserId = Guid.NewGuid(),
+            ShowtimeId = showtime.Id,
+            Tickets = seats.Select(s => new Ticket { Id = Guid.NewGuid(), PurchaseId = purchaseId, ShowtimeId = showtime.Id, SeatRow = s.Row, SeatNumber = s.Number }).ToList(),
+        };
+        _purchases.Seed(purchase);
+        return purchase;
     }
 
     private Showtime SeedShowtime(DateTime start)

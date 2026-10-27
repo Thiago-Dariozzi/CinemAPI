@@ -18,6 +18,9 @@ public sealed class AuthorizationTests(ApiFixture api)
     private const string Anonymous = "Anonymous";
     private static readonly string NoSuchId = Guid.NewGuid().ToString();
 
+    // Función inexistente: el cliente pasa la autorización y el servicio responde 400 (referencia inválida).
+    private static readonly string PurchaseBody = $$"""{"showtimeId":"{{NoSuchId}}","seats":[{"row":1,"number":1}]}""";
+
     public static TheoryData<string, string, string, string?, HttpStatusCode> Cases => new()
     {
         // Auth
@@ -46,9 +49,9 @@ public sealed class AuthorizationTests(ApiFixture api)
 
         // Screen
         { Anonymous, "GET", "/api/screen", null, HttpStatusCode.OK },
-        { Anonymous, "POST", "/api/screen", """{"name":"{unique}","capacity":50}""", HttpStatusCode.Unauthorized },
-        { "Client", "POST", "/api/screen", """{"name":"{unique}","capacity":50}""", HttpStatusCode.Forbidden },
-        { "SuperAdmin", "POST", "/api/screen", """{"name":"{unique}","capacity":50}""", HttpStatusCode.Created },
+        { Anonymous, "POST", "/api/screen", """{"name":"{unique}","rows":5,"seatsPerRow":10}""", HttpStatusCode.Unauthorized },
+        { "Client", "POST", "/api/screen", """{"name":"{unique}","rows":5,"seatsPerRow":10}""", HttpStatusCode.Forbidden },
+        { "SuperAdmin", "POST", "/api/screen", """{"name":"{unique}","rows":5,"seatsPerRow":10}""", HttpStatusCode.Created },
 
         // Showtime
         { Anonymous, "GET", "/api/showtime", null, HttpStatusCode.OK },
@@ -56,10 +59,27 @@ public sealed class AuthorizationTests(ApiFixture api)
         { "Client", "DELETE", $"/api/showtime/{NoSuchId}", null, HttpStatusCode.Forbidden },
         { "Admin", "DELETE", $"/api/showtime/{NoSuchId}", null, HttpStatusCode.NotFound },
 
-        // Ticket: el listado completo es del staff
-        { Anonymous, "GET", "/api/ticket", null, HttpStatusCode.Unauthorized },
-        { "Client", "GET", "/api/ticket", null, HttpStatusCode.Forbidden },
-        { "Admin", "GET", "/api/ticket", null, HttpStatusCode.OK },
+        // Mapa de butacas y próximas funciones: públicos
+        { Anonymous, "GET", "/api/showtime/upcoming", null, HttpStatusCode.OK },
+        { Anonymous, "GET", $"/api/showtime/{NoSuchId}/seats", null, HttpStatusCode.NotFound },
+
+        // Fee: el cargo vigente lo ve cualquier usuario logueado (204: no hay ninguno en la base de prueba)
+        { Anonymous, "GET", "/api/fee/current", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", "/api/fee/current", null, HttpStatusCode.NoContent },
+
+        // Purchase: compra y "mis compras" solo clientes; el listado de ventas solo staff
+        { Anonymous, "POST", "/api/purchase", PurchaseBody, HttpStatusCode.Unauthorized },
+        { "Admin", "POST", "/api/purchase", PurchaseBody, HttpStatusCode.Forbidden },
+        { "Client", "POST", "/api/purchase", PurchaseBody, HttpStatusCode.BadRequest },
+        { Anonymous, "GET", "/api/purchase/mine", null, HttpStatusCode.Unauthorized },
+        { "Admin", "GET", "/api/purchase/mine", null, HttpStatusCode.Forbidden },
+        { "Client", "GET", "/api/purchase/mine", null, HttpStatusCode.OK },
+        { Anonymous, "GET", "/api/purchase", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", "/api/purchase", null, HttpStatusCode.Forbidden },
+        { "Admin", "GET", "/api/purchase", null, HttpStatusCode.OK },
+        { Anonymous, "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.Unauthorized },
+        { "Client", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
+        { "Admin", "POST", $"/api/purchase/{NoSuchId}/cancel", null, HttpStatusCode.NotFound },
     };
 
     [Theory]
