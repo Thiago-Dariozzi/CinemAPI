@@ -10,12 +10,35 @@ namespace Application.Services;
 public sealed class MovieService(
     IMovieRepository movieRepository,
     IGenreRepository genreRepository,
+    IShowtimeRepository showtimeRepository,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : IMovieService
 {
     private const string EntityName = "la película";
 
-    public async Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(CancellationToken ct) =>
-        ToResponses(await movieRepository.GetShowingMoviesAsync(ct));
+    // Con fecha: solo las que tienen una función ese día que todavía no empezó (hoy no cuentan las de la
+    // mañana que ya pasaron). Un día pasado no tiene ninguna.
+    public async Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(Guid? genreId, DateOnly? date, CancellationToken ct)
+    {
+        var movies = await movieRepository.GetShowingMoviesAsync(genreId, ct);
+        if (date is not { } day)
+        {
+            return ToResponses(movies);
+        }
+
+        var dayStart = day.ToDateTime(TimeOnly.MinValue);
+        var now = timeProvider.Now();
+        // Igual que GetUpcomingAsync y la compra: la que empieza justo ahora ya no cuenta.
+        var from = now >= dayStart ? now.AddTicks(1) : dayStart;
+        var to = dayStart.AddDays(1);
+        if (from >= to)
+        {
+            return [];
+        }
+
+        var withShowtimes = (await showtimeRepository.GetMovieIdsWithShowtimesAsync(from, to, ct)).ToHashSet();
+        return ToResponses(movies.Where(m => withShowtimes.Contains(m.Id)));
+    }
 
     public async Task<IReadOnlyList<MovieResponse>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
         ToResponses(await movieRepository.GetByGenreAsync(genreId, ct));

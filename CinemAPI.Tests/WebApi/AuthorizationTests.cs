@@ -41,6 +41,12 @@ public sealed class AuthorizationTests(ApiFixture api)
         { "Client", "POST", $"/api/user/{NoSuchId}/reactivate", null, HttpStatusCode.Forbidden },
         { "Admin", "POST", $"/api/user/{NoSuchId}/reactivate", null, HttpStatusCode.NotFound },
 
+        // Cartelera: pública, con filtros
+        { Anonymous, "GET", $"/api/movie/active?genreId={NoSuchId}&date=2026-11-02", null, HttpStatusCode.OK },
+        { Anonymous, "GET", "/api/movie/active?date=no-es-fecha", null, HttpStatusCode.BadRequest },
+        { Anonymous, "GET", "/api/movie/active?genreId=abc", null, HttpStatusCode.BadRequest },
+        { Anonymous, "GET", $"/api/movie/{NoSuchId}/showtimes", null, HttpStatusCode.NotFound },
+
         // Genre: lectura pública, escritura staff
         { Anonymous, "GET", "/api/genre", null, HttpStatusCode.OK },
         { Anonymous, "POST", "/api/genre", """{"name":"{unique}"}""", HttpStatusCode.Unauthorized },

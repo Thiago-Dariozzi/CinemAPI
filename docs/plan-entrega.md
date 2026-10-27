@@ -121,7 +121,7 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 
 | Recurso | GET | POST/PUT/DELETE |
 |---|---|---|
-| `Genre`, `Movie`, `Showtime` | 🌐 (`/movie/active`, `/movie/{id}`, `/showtime/movie/{id}`, …) | 🛠 |
+| `Genre`, `Movie`, `Showtime` | 🌐 (`/movie/active?genreId=&date=`, `/movie/{id}`, `/movie/{id}/showtimes`, `/showtime/movie/{id}`, …) | 🛠 |
 | `GET /api/movie` (todas, incluye fuera de cartelera) | 🌐 | — |
 | `Screen` ✎ | 🌐 | 🛠 — request con `rows` y `seatsPerRow`; response agrega `rows`, `seatsPerRow` y mantiene `capacity` (calculada) |
 | ✚ `GET /api/showtime/{id}/seats` | 🌐 | Mapa: `rows`, `seatsPerRow`, `price`, butacas ocupadas `[{ row, number }]` |
@@ -167,9 +167,9 @@ Sesión real: `src/auth/session.js` guarda `{ token, user }` en `localStorage`; 
 |---|---|---|
 | Anónimo | `/login` | Login (sin estilos inline, #22) |
 | | `/registro` ✚ | Registro de cliente (`EntityForm`) |
-| Client | `/panel/cartelera` | Cartelera con `getActiveMovies` (D1, #15) |
-| | `/panel/peliculas/:id` ✚ | Detalle + funciones futuras |
-| | `/panel/funciones/:id/comprar` ✚ | Mapa de butacas (máx. 10), subtotal + cargo + total, confirmar |
+| Anónimo y Client | `/cartelera` ✎ | Cartelera pública con filtros por día y género (antes `/panel/cartelera`, que ahora redirige) |
+| | `/cartelera/:id` ✎ | Ficha + horarios por día con butacas libres (antes `/panel/peliculas/:id`) |
+| Client | `/panel/funciones/:id/comprar` ✚ | Mapa de butacas (máx. 10), subtotal + cargo + total, confirmar |
 | | `/panel/mis-compras` ✚ | Reemplaza "Mis Tickets": compras con butacas; cancelar si faltan ≥ 2 h |
 | | `/panel/perfil` ✚ | Editar nombre/email y cambiar contraseña |
 | Admin | `/admin/peliculas` | ABM + fecha de estreno (D2, #16) + funciones (sin N+1, #11) |
@@ -213,6 +213,11 @@ El pedido juntó en una sola tarea lo que acá eran las tareas 2, 3, 4 y la part
 
 - Back: ABM de cargos (`GET/POST/PUT/DELETE /api/fee`, `SuperAdminOnly` por endpoint; `GET /api/fee/current` sigue para cualquier logueado). Un solo vigente: marcar uno desmarca al anterior en una transacción de dos guardados (`IUnitOfWork.ExecuteInTransactionAsync`), porque EF no ordena los UPDATE según el índice único filtrado (lo encontró el test de integración). Usuarios: `GET /api/user` incluye a los dados de baja y acepta `search` (nombre o email); `POST /api/user/{id}/reactivate` con las mismas reglas que la baja.
 - Front: Clientes y Administradores pasan a los genéricos (`EntityForm`/`EntityCard`/`EntityGrid`/`useEntityCrud`) con búsqueda, baja y reactivación; Cargos con genéricos (se borra `pages/FeesPage.jsx`). `useEntityCrud` suma `restoreFn`, `softDelete`, `reloadAfterMutation` y `reload`; `EntityCard`, `onRestore`.
+
+### Cartelera pública entregada (pedido del 27/10)
+
+- Back: `GET /api/movie/active` acepta `genreId` y `date` (películas con funciones ese día que no empezaron); `GET /api/movie/{id}/showtimes` devuelve las funciones futuras agrupadas por día con butacas libres (sin N+1). Ambos públicos.
+- Front: cartelera pública en `/cartelera` y ficha en `/cartelera/:movieId` (afiche, sinopsis, duración, género, estreno y horarios por día con butacas libres), filtros por día y género en la URL, estados de carga, vacío y error. "Comprar" sin sesión lleva al login y vuelve a la película. El cliente usa la barra superior pública en todo su recorrido; la barra lateral queda para el staff. `/panel/cartelera` y `/panel/peliculas/:id` redirigen a las rutas nuevas. Las pantallas que no son públicas se cargan aparte (`React.lazy`).
 
 ### Decisiones aplicadas en la Tarea 1 (cambian el plan original)
 

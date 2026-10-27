@@ -7,9 +7,9 @@ namespace Infrastructure.Repositories;
 public sealed class MovieRepository(CinemAPIContext context) : BaseRepository<Movie>(context), IMovieRepository
 {
     // Cartelera: activas (filtro global) y en cartelera.
-    public async Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(CancellationToken ct) =>
+    public async Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(Guid? genreId, CancellationToken ct) =>
         await Context.Movies.AsNoTracking()
-            .Where(m => m.IsShowing)
+            .Where(m => m.IsShowing && (genreId == null || m.GenreId == genreId))
             .OrderByDescending(m => m.ReleaseDate)
             .ToListAsync(ct);
 

@@ -17,6 +17,14 @@ public sealed class TicketRepository(CinemAPIContext context) : BaseRepository<T
     public Task<bool> HasSoldTicketsAsync(Guid showtimeId, CancellationToken ct) =>
         Sold().AnyAsync(t => t.ShowtimeId == showtimeId, ct);
 
+    public async Task<IReadOnlyDictionary<Guid, int>> CountSoldByShowtimeAsync(Guid movieId, DateTime after, CancellationToken ct) =>
+        await Sold()
+            .Join(Context.Showtimes, t => t.ShowtimeId, s => s.Id, (t, s) => new { t.ShowtimeId, s.MovieId, s.StartTime })
+            .Where(x => x.MovieId == movieId && x.StartTime > after)
+            .GroupBy(x => x.ShowtimeId)
+            .Select(g => new { ShowtimeId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ShowtimeId, x => x.Count, ct);
+
     public Task<bool> HasSoldSeatsOutsideAsync(Guid screenId, int rows, int seatsPerRow, DateTime after, CancellationToken ct) =>
         Sold()
             .Join(Context.Showtimes, t => t.ShowtimeId, s => s.Id, (t, s) => new { t.SeatRow, t.SeatNumber, s.ScreenId, s.StartTime })

@@ -55,6 +55,30 @@ public sealed class PurchaseApiTests(ApiFixture api)
         Assert.Contains("A5", problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
+    // La ficha pública de la película: sin token, con las funciones del día y las butacas que quedan.
+    [Fact]
+    public async Task MovieSchedule_IsPublic_AndCountsTheSoldSeats()
+    {
+        var showtimeId = await api.CreateShowtimeAsync(Tomorrow, rows: 2, seatsPerRow: 5);
+        using var buyer = api.CreateClient(api.ClientToken);
+        (await buyer.PostAsJsonAsync("/api/purchase", Purchase(showtimeId, (1, 1), (2, 5)))).EnsureSuccessStatusCode();
+        using var anonymous = api.CreateClient();
+        using var map = await ReadJsonAsync(await anonymous.GetAsync($"/api/showtime/{showtimeId}/seats"));
+        var movieId = map.RootElement.GetProperty("movieId").GetGuid();
+
+        var response = await anonymous.GetAsync($"/api/movie/{movieId}/showtimes");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = await ReadJsonAsync(response);
+        var day = Assert.Single(body.RootElement.EnumerateArray());
+        Assert.Equal(DateOnly.FromDateTime(Tomorrow).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), day.GetProperty("date").GetString());
+        var showtime = Assert.Single(day.GetProperty("showtimes").EnumerateArray());
+        Assert.Equal((10, 8), (showtime.GetProperty("totalSeats").GetInt32(), showtime.GetProperty("availableSeats").GetInt32()));
+
+        using var billboard = await ReadJsonAsync(await anonymous.GetAsync($"/api/movie/active?date={day.GetProperty("date").GetString()}"));
+        Assert.Contains(billboard.RootElement.EnumerateArray(), m => m.GetProperty("id").GetGuid() == movieId);
+    }
+
     // La carrera: varios clientes piden la misma butaca a la vez. Pasen o no juntos la validación del
     // servicio, el índice único deja una sola venta y el resto recibe 409 (nunca 500).
     [Fact]

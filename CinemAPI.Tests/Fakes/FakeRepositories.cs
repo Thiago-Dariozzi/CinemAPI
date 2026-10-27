@@ -42,8 +42,8 @@ public sealed class FakeMovieRepository : InMemoryRepository<Movie>, IMovieRepos
     public Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
         List(Active().Where(m => string.Equals(m.Title, title, StringComparison.OrdinalIgnoreCase)));
 
-    public Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(CancellationToken ct) =>
-        List(Active().Where(m => m.IsShowing).OrderByDescending(m => m.ReleaseDate));
+    public Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(Guid? genreId, CancellationToken ct) =>
+        List(Active().Where(m => m.IsShowing && (genreId is null || m.GenreId == genreId)).OrderByDescending(m => m.ReleaseDate));
 
     public Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
         List(Active().Where(m => m.GenreId == genreId));
@@ -68,6 +68,14 @@ public sealed class FakeShowtimeRepository(FakeMovieRepository movies) : InMemor
         Task.FromResult<IReadOnlyList<Showtime>>(Active()
             .Where(s => s.StartTime > after && (movieId is null || s.MovieId == movieId))
             .OrderBy(s => s.StartTime)
+            .ToList());
+
+    // No mira si la sala está activa (este fake no conoce las salas); eso lo cubre el test de integración.
+    public Task<IReadOnlyList<Guid>> GetMovieIdsWithShowtimesAsync(DateTime from, DateTime to, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Guid>>(Active()
+            .Where(s => s.StartTime >= from && s.StartTime < to)
+            .Select(s => s.MovieId)
+            .Distinct()
             .ToList());
 
     public Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct) =>
@@ -114,6 +122,15 @@ public sealed class FakeTicketRepository(FakePurchaseRepository purchases, FakeS
 
     public Task<bool> HasSoldTicketsAsync(Guid showtimeId, CancellationToken ct) =>
         Task.FromResult(Sold().Any(t => t.ShowtimeId == showtimeId));
+
+    public Task<IReadOnlyDictionary<Guid, int>> CountSoldByShowtimeAsync(Guid movieId, DateTime after, CancellationToken ct)
+    {
+        var upcoming = showtimes.Stored.Where(s => s.IsActive && s.MovieId == movieId && s.StartTime > after).Select(s => s.Id).ToHashSet();
+        return Task.FromResult<IReadOnlyDictionary<Guid, int>>(Sold()
+            .Where(t => upcoming.Contains(t.ShowtimeId))
+            .GroupBy(t => t.ShowtimeId)
+            .ToDictionary(g => g.Key, g => g.Count()));
+    }
 
     public Task<bool> HasSoldSeatsOutsideAsync(Guid screenId, int rows, int seatsPerRow, DateTime after, CancellationToken ct)
     {

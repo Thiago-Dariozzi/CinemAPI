@@ -10,6 +10,9 @@ public interface IShowtimeRepository : IBaseRepository<Showtime>
     // Funciones que empiezan después de 'after', de una película o de todas, ordenadas por horario.
     Task<IReadOnlyList<Showtime>> GetUpcomingAsync(Guid? movieId, DateTime after, CancellationToken ct);
 
+    // Películas con alguna función activa, en una sala activa, que empieza en [from, to).
+    Task<IReadOnlyList<Guid>> GetMovieIdsWithShowtimesAsync(DateTime from, DateTime to, CancellationToken ct);
+
     // Si la sala tiene alguna función activa que empieza después de 'after'.
     Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct);
 

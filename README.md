@@ -62,6 +62,13 @@ Usuarios demo en Development (contraseña `DemoUsers:Password`): `admin@cinemapi
 
 Autenticación: `POST /api/auth/login` devuelve `{ token, expiresAt, user }`; el token (8 h) va en `Authorization: Bearer <token>`. Sin token → 401; con un rol que no alcanza → 403 (ambos como ProblemDetails).
 
+## Cartelera (pública)
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /api/movie/active?genreId=&date=2026-11-02` | Películas en cartelera; `genreId` filtra por género y `date` (`yyyy-MM-dd`, hora local del cine) deja solo las que tienen alguna función ese día que todavía no empezó, en una sala activa (un día pasado no tiene ninguna). Fecha o Guid inválidos → 400 |
+| `GET /api/movie/{id}/showtimes` | Funciones futuras de la película agrupadas por día: `[{ date, showtimes: [{ id, startTime, screenId, screenName, price, totalSeats, availableSeats }] }]`. Vacío si no está en cartelera; 404 si no existe; omite las funciones de salas dadas de baja. Tres consultas en total (funciones, salas y ventas agrupadas) |
+
 ## Compra de entradas
 
 | Endpoint | Quién | Qué hace |

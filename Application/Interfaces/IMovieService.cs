@@ -5,7 +5,8 @@ namespace Application.Interfaces;
 public interface IMovieService
 {
     Task<IReadOnlyList<MovieResponse>> GetAllAsync(CancellationToken ct);
-    Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(CancellationToken ct);
+    // Cartelera: en cartelera, de un género (opcional) y con funciones ese día (opcional).
+    Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(Guid? genreId, DateOnly? date, CancellationToken ct);
     Task<IReadOnlyList<MovieResponse>> GetByGenreAsync(Guid genreId, CancellationToken ct);
     Task<IReadOnlyList<MovieResponse>> GetByTitleAsync(string title, CancellationToken ct);
     Task<MovieResponse> GetByIdAsync(Guid id, CancellationToken ct);

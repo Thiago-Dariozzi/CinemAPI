@@ -62,6 +62,39 @@ public sealed class ShowtimeService(
             taken.Select(s => new SeatResponse(s.Row, s.Number)).ToList());
     }
 
+    // Tres consultas en total (funciones, salas y ventas por función), nunca una por función. Las funciones
+    // de una sala dada de baja no se listan: no tienen mapa de butacas.
+    public async Task<IReadOnlyList<ShowtimeDayResponse>> GetScheduleByMovieAsync(Guid movieId, CancellationToken ct)
+    {
+        var movie = await movieRepository.GetByIdAsync(movieId, ct) ?? throw new NotFoundException("la película", movieId);
+        if (!movie.IsShowing)
+        {
+            return [];
+        }
+
+        var now = timeProvider.Now();
+        var showtimes = await showtimeRepository.GetUpcomingAsync(movieId, now, ct);
+        if (showtimes.Count == 0)
+        {
+            return [];
+        }
+
+        var screens = (await screenRepository.GetAllAsync(ct)).ToDictionary(s => s.Id);
+        var sold = await ticketRepository.CountSoldByShowtimeAsync(movieId, now, ct);
+
+        return showtimes
+            .Where(s => screens.ContainsKey(s.ScreenId))
+            .Select(s =>
+            {
+                var screen = screens[s.ScreenId];
+                var available = Math.Max(0, screen.Capacity - sold.GetValueOrDefault(s.Id));
+                return new ShowtimeAvailabilityResponse(s.Id, s.StartTime, screen.Id, screen.Name, s.Price, screen.Capacity, available);
+            })
+            .GroupBy(s => DateOnly.FromDateTime(s.StartTime))
+            .Select(day => new ShowtimeDayResponse(day.Key, day.ToList()))
+            .ToList();
+    }
+
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
     public async Task<ShowtimeResponse> CreateAsync(CreateShowtimeRequest request, CancellationToken ct)
     {

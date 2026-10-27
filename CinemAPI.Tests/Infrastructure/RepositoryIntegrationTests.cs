@@ -234,11 +234,64 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
         await SaveAsync(notShowing, deleted);
 
         await using var context = database.CreateContext();
-        var ids = (await new MovieRepository(context).GetShowingMoviesAsync(CancellationToken.None)).Select(m => m.Id).ToList();
+        var ids = (await new MovieRepository(context).GetShowingMoviesAsync(genreId: null, CancellationToken.None)).Select(m => m.Id).ToList();
 
         Assert.Contains(showing.Id, ids);
         Assert.DoesNotContain(notShowing.Id, ids);
         Assert.DoesNotContain(deleted.Id, ids);
+    }
+
+    [Fact]
+    public async Task MovieRepository_GetShowingMovies_FiltersByGenre()
+    {
+        var (genre, movie, _) = await SeedCatalogAsync(durationMinutes: 100);
+        var (_, otherGenreMovie, _) = await SeedCatalogAsync(durationMinutes: 100);
+
+        await using var context = database.CreateContext();
+        var ids = (await new MovieRepository(context).GetShowingMoviesAsync(genre.Id, CancellationToken.None)).Select(m => m.Id).ToList();
+
+        Assert.Equal([movie.Id], ids);
+        Assert.DoesNotContain(otherGenreMovie.Id, ids);
+    }
+
+    [Fact]
+    public async Task ShowtimeRepository_GetMovieIdsWithShowtimes_UsesTheWindowAndIgnoresDeletedShowtimes()
+    {
+        var (_, movie, screen) = await SeedCatalogAsync(durationMinutes: 100);
+        var (_, deletedOnly, otherScreen) = await SeedCatalogAsync(durationMinutes: 100);
+        var (_, outside, thirdScreen) = await SeedCatalogAsync(durationMinutes: 100);
+        var (_, deletedScreenOnly, deletedScreen) = await SeedCatalogAsync(durationMinutes: 100);
+        var deleted = NewShowtime(deletedOnly, otherScreen, Day.AddHours(12));
+        await SaveAsync(NewShowtime(movie, screen, Day.AddHours(10)), NewShowtime(movie, screen, Day.AddHours(14)), deleted,
+            NewShowtime(outside, thirdScreen, Day.AddDays(1)), NewShowtime(deletedScreenOnly, deletedScreen, Day.AddHours(16)));
+        await DeactivateAsync<Showtime>(deleted.Id);
+        await DeactivateAsync<Screen>(deletedScreen.Id);
+
+        await using var context = database.CreateContext();
+        var ids = await new ShowtimeRepository(context).GetMovieIdsWithShowtimesAsync(Day, Day.AddDays(1), CancellationToken.None);
+
+        Assert.Contains(movie.Id, ids);
+        Assert.Single(ids, id => id == movie.Id);
+        Assert.DoesNotContain(deletedOnly.Id, ids);
+        Assert.DoesNotContain(outside.Id, ids);
+        Assert.DoesNotContain(deletedScreenOnly.Id, ids);
+    }
+
+    [Fact]
+    public async Task TicketRepository_CountSoldByShowtime_GroupsInOneQuery_AndSkipsCancelledAndPast()
+    {
+        var (_, movie, screen) = await SeedCatalogAsync(durationMinutes: 100);
+        var withSales = NewShowtime(movie, screen, Day.AddHours(10));
+        var withoutSales = NewShowtime(movie, screen, Day.AddHours(14));
+        var past = NewShowtime(movie, screen, Day.AddHours(-5));
+        var user = new User { Id = Guid.NewGuid(), Name = "Comprador", Email = $"c.{Guid.NewGuid():N}@cine.com", PasswordHash = "x" };
+        await SaveAsync(withSales, withoutSales, past, user,
+            NewPurchase(user, withSales, cancelled: false, 1, 2), NewPurchase(user, withSales, cancelled: true, 3), NewPurchase(user, past, cancelled: false, 1));
+
+        await using var context = database.CreateContext();
+        var counts = await new TicketRepository(context).CountSoldByShowtimeAsync(movie.Id, Day, CancellationToken.None);
+
+        Assert.Equal(new Dictionary<Guid, int> { [withSales.Id] = 2 }, counts);
     }
 
     [Fact]
@@ -294,6 +347,21 @@ public sealed class RepositoryIntegrationTests(SqlServerDatabaseFixture database
 
     private static Showtime NewShowtime(Movie movie, Screen screen, DateTime start) =>
         new() { Id = Guid.NewGuid(), MovieId = movie.Id, ScreenId = screen.Id, StartTime = start, Price = 10m };
+
+    private static Purchase NewPurchase(User user, Showtime showtime, bool cancelled, params int[] seatNumbers)
+    {
+        var id = Guid.NewGuid();
+        return new Purchase
+        {
+            Id = id,
+            UserId = user.Id,
+            ShowtimeId = showtime.Id,
+            Status = cancelled ? PurchaseStatus.Cancelled : PurchaseStatus.Confirmed,
+            Tickets = seatNumbers
+                .Select(n => new Ticket { Id = Guid.NewGuid(), PurchaseId = id, ShowtimeId = showtime.Id, SeatRow = 1, SeatNumber = n, Price = 10m, IsCancelled = cancelled })
+                .ToList(),
+        };
+    }
 
     private async Task SaveAsync(params object[] entities)
     {

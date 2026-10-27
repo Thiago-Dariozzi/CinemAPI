@@ -24,6 +24,13 @@ public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository
             .OrderBy(s => s.StartTime)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Guid>> GetMovieIdsWithShowtimesAsync(DateTime from, DateTime to, CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .Where(s => s.StartTime >= from && s.StartTime < to && Context.Screens.Any(sc => sc.Id == s.ScreenId))
+            .Select(s => s.MovieId)
+            .Distinct()
+            .ToListAsync(ct);
+
     public Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct) =>
         Context.Showtimes.AnyAsync(s => s.ScreenId == screenId && s.StartTime > after, ct);
 

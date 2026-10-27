@@ -324,6 +324,67 @@ public sealed class ShowtimeServiceTests
         Assert.DoesNotContain(result, s => s.Id == past.Id);
     }
 
+    [Fact]
+    public async Task GetSchedule_GroupsUpcomingShowtimesByDay_WithAvailableSeats()
+    {
+        var sameDayEarlier = SeedShowtime(Day.AddHours(16));
+        var nextDay = SeedShowtime(Day.AddDays(1).AddHours(18));
+        SeedShowtime(Day.AddDays(-2)); // ya pasó
+        SeedShowtime(Day.AddDays(2)).IsActive = false;
+        SeedPurchase(_existing, (1, 1), (1, 2), (1, 3));
+        SeedPurchase(_existing, (2, 1)).Tickets.ForEach(t => t.IsCancelled = true);
+
+        var days = await _sut.GetScheduleByMovieAsync(_movie.Id, Ct);
+
+        Assert.Equal([DateOnly.FromDateTime(Day), DateOnly.FromDateTime(Day.AddDays(1))], days.Select(d => d.Date));
+        Assert.Equal([sameDayEarlier.Id, _existing.Id], days[0].Showtimes.Select(s => s.Id));
+        Assert.Equal([nextDay.Id], days[1].Showtimes.Select(s => s.Id));
+        var sold = days[0].Showtimes[1];
+        Assert.Equal(("Sala 1", 100, 97, 10m), (sold.ScreenName, sold.TotalSeats, sold.AvailableSeats, sold.Price));
+        Assert.Equal(100, days[0].Showtimes[0].AvailableSeats);
+    }
+
+    [Fact]
+    public async Task GetSchedule_SkipsShowtimesOfADeletedScreen()
+    {
+        var otherScreen = new Screen { Id = Guid.NewGuid(), Name = "Sala 2", Rows = 5, SeatsPerRow = 5, IsActive = false };
+        _screens.Seed(otherScreen);
+        _showtimes.Seed(new Showtime { Id = Guid.NewGuid(), MovieId = _movie.Id, ScreenId = otherScreen.Id, StartTime = Day.AddHours(10), Price = 10m });
+
+        var days = await _sut.GetScheduleByMovieAsync(_movie.Id, Ct);
+
+        Assert.Equal([_existing.Id], days.SelectMany(d => d.Showtimes).Select(s => s.Id));
+    }
+
+    [Fact]
+    public async Task GetSchedule_OfAMovieNotShowing_IsEmpty_AndOfAMissingMovie_ThrowsNotFound()
+    {
+        _movie.IsShowing = false;
+
+        Assert.Empty(await _sut.GetScheduleByMovieAsync(_movie.Id, Ct));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetScheduleByMovieAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task GetSchedule_OfADeletedMovie_ThrowsNotFound()
+    {
+        _movie.IsActive = false;
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetScheduleByMovieAsync(_movie.Id, Ct));
+    }
+
+    [Fact]
+    public async Task GetSchedule_AroundMidnight_SplitsTheDaysByLocalDate()
+    {
+        var lateNight = SeedShowtime(Day.AddDays(3).AddHours(23).AddMinutes(30));
+        var afterMidnight = SeedShowtime(Day.AddDays(4).AddMinutes(30));
+
+        var days = await _sut.GetScheduleByMovieAsync(_movie.Id, Ct);
+
+        Assert.Equal([lateNight.Id], days.Single(d => d.Date == DateOnly.FromDateTime(Day.AddDays(3))).Showtimes.Select(s => s.Id));
+        Assert.Equal([afterMidnight.Id], days.Single(d => d.Date == DateOnly.FromDateTime(Day.AddDays(4))).Showtimes.Select(s => s.Id));
+    }
+
     private Purchase SeedPurchase(Showtime showtime, params (int Row, int Number)[] seats)
     {
         var purchaseId = Guid.NewGuid();
