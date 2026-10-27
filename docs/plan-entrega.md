@@ -190,14 +190,22 @@ Cada tarea toca los dos repos y termina con los dos funcionando de punta a punta
 | Tarea | Back | Front | Hallazgos del front | Estado |
 |---|---|---|---|---|
 | **1. Autenticación y roles** | Hash + migración `RenameUserPasswordToPasswordHash` + rehash al arrancar, JWT, `AuthController`, políticas y `[Authorize]` en todos los controllers, `UserService` por rol, SuperAdmin inicial y usuarios demo, OpenAPI Bearer, tests de integración 401/403 | `session.js` real, `httpClient` con token y 401, `ProtectedRoute` por roles, Sidebar por rol, Login/Registro/Mi perfil, Clientes y Administradores, cartelera con `getActiveMovies`, páginas muertas fuera | #15 (D1), #19 (D4), #20 (D3), #22, deuda "login de demo" | ✅ back `87bd41c` · front `d8a2534` |
-| **2. Cargos (Fee)** | `Fee` con Guid + `IsCurrent`, migración `AddFees`, `FeeService`/`FeeController` (SuperAdmin), `GET /api/fee/current` | Pantalla Cargos con genéricos (reemplaza la página pendiente) | — | ⏳ |
-| **3. Salas con butacas y catálogo** | `Screen.Rows`/`SeatsPerRow`, migración `AddScreenSeatLayout`, `GET /api/showtime/{id}/seats`, `/showtime/upcoming` | Salas con filas × butacas; Movies: fecha de estreno, `MovieCard` → `EntityCard`, `MovieFunctionsPanel` → `useMovieShowtimes` + subcomponentes con salas/películas cargadas una vez | #8, #10 (Movies), #11, #13 (`useEntityList` con error), #16 (D2) | ⏳ |
-| **4. Compra de entradas** | `Purchase`, `Ticket` por función + butaca, migración `AddPurchasesAndSeatTickets` (borra los tickets actuales, P1), `PurchaseService` (reglas, cargo, índice único), `POST /api/purchase`, `GET /mine`, cancelación | Detalle de película → funciones → `SeatMap` → confirmar; Mis compras con cancelación. Se borran `Tickets/` y `TicketController` | #7–#10, #12, #14, #18, #28 (Users/Tickets: Tickets desaparece; Clientes/Administradores pasan a genéricos acá) | ⏳ |
-| **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportController` | Ventas y Reportes | — | ⏳ |
+| **2. Cargos (Fee)** | `Fee` con Guid + `IsCurrent`, migración `AddFees`, `FeeService`/`FeeController` (SuperAdmin), `GET /api/fee/current` | Pantalla Cargos con genéricos (reemplaza la página pendiente) | — | ◐ entidad, migración y cargo vigente; falta el ABM |
+| **3. Salas con butacas y catálogo** | `Screen.Rows`/`SeatsPerRow`, migración `AddScreenSeatLayout`, `GET /api/showtime/{id}/seats`, `/showtime/upcoming` | Salas con filas × butacas; Movies: fecha de estreno, `MovieCard` → `EntityCard`, `MovieFunctionsPanel` → `useMovieShowtimes` + subcomponentes con salas/películas cargadas una vez | #8, #10 (Movies), #11, #13 (`useEntityList` con error), #16 (D2) | ◐ salas y butacas ✅; falta Movies (#8, #10, #11, #13, #16) |
+| **4. Compra de entradas** | `Purchase`, `Ticket` por función + butaca, migración `AddPurchasesAndSeatTickets` (borra los tickets actuales, P1), `PurchaseService` (reglas, cargo, índice único), `POST /api/purchase`, `GET /mine`, cancelación | Detalle de película → funciones → `SeatMap` → confirmar; Mis compras con cancelación. Se borran `Tickets/` y `TicketController` | #7–#10, #12, #14, #18, #28 (Users/Tickets: Tickets desaparece; Clientes/Administradores pasan a genéricos acá) | ✅ (migración migra los tickets en lugar de borrarlos) |
+| **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportController` | Ventas y Reportes | — | ◐ ventas ✅; faltan reportes |
 | **6. Tests** | Integración del índice de butacas y de cancelación; casos de autorización de los endpoints nuevos | Vitest + Testing Library (D5): `httpClient`, `session`, `fieldValidation`, `EntityForm`, `useEntityCrud`, `SeatMap` | #21 | ⏳ |
 | **7. Cierre** | README final, revisión de todo el diff | Estilos y accesibilidad, README, `globalIgnores` de `CinemapiPhone` | #17, #18 restantes, #23 (solo si el profe lo confirma), #24, #29, #30 | ⏳ |
 
 Los tests de cada servicio nuevo van **en la misma tarea** que el servicio (Definition of Done del backend), y los casos 401/403 de cada endpoint nuevo se suman a `AuthorizationTests`.
+
+### Tarea 2 entregada: compra de entradas (26/10)
+
+El pedido juntó en una sola tarea lo que acá eran las tareas 2, 3, 4 y la parte de ventas de la 5:
+
+- Back: `Screen.Rows`/`SeatsPerRow`, `Fee` (Guid + `IsCurrent`, solo `GET /api/fee/current`; el ABM de cargos queda pendiente), `Purchase`, `Ticket` por butaca, **una** migración `AddSeatLayoutFeesAndPurchases`, `GET /api/showtime/{id}/seats`, `GET /api/showtime/upcoming`, `PurchaseController` completo (incluye `GET /api/purchase` con filtros para el staff), `TicketController` eliminado. Reglas extra: no se borra una función con entradas vendidas ni se le cambia la sala, y no se achica ni se da de baja una sala con entradas vendidas para funciones futuras (409).
+- Front: cartelera → funciones → mapa de butacas → resumen → confirmar; "Mis entradas" (próximas y pasadas, cancelar); "Ventas" para el staff con filtros; salas con filas × butacas. Se borraron `Tickets/`, `UserTickets` y `ticketApi`.
+- Pendiente de las tareas originales: ABM de cargos (SuperAdmin), reportes, fecha de estreno y refactor de `MovieCard`/`MovieFunctionsPanel`.
 
 ### Decisiones aplicadas en la Tarea 1 (cambian el plan original)
 
@@ -234,7 +242,7 @@ No se recorta: auth + roles en todos los endpoints, compra con butacas y cargo, 
 
 | | Pregunta | Decisión |
 |---|---|---|
-| P1 | Tickets actuales sin función ni butaca | Se borran en la migración de la Tarea 4 |
+| P1 | Tickets actuales sin función ni butaca | ~~Se borran~~ → Cambiado el 26/10: se migran a una función de esa película en esa sala (y una butaca libre); solo se borran los que no tienen ninguna función posible o no entran en la sala (ver `AddSeatLayoutFeesAndPurchases`) |
 | P2 | ¿Catálogo sin login? | Sí: los GET de cartelera, películas, funciones, géneros (y salas) son públicos |
 | P3 | ¿Compra ajena 403 o 404? | 403 (`ForbiddenException`) |
 | — | Paquetes | Aprobados los 4; Vitest y Testing Library recién en la Tarea 6 |
