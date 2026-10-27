@@ -196,7 +196,7 @@ Cada tarea toca los dos repos y termina con los dos funcionando de punta a punta
 | **4. Compra de entradas** | `Purchase`, `Ticket` por función + butaca, migración `AddPurchasesAndSeatTickets` (borra los tickets actuales, P1), `PurchaseService` (reglas, cargo, índice único), `POST /api/purchase`, `GET /mine`, cancelación | Detalle de película → funciones → `SeatMap` → confirmar; Mis compras con cancelación. Se borran `Tickets/` y `TicketController` | #7–#10, #12, #14, #18, #28 (Users/Tickets: Tickets desaparece; Clientes/Administradores pasan a genéricos acá) | ✅ (migración migra los tickets en lugar de borrarlos) |
 | **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportsController` | Ventas y Reportes | — | ✅ |
 | **6. Tests** | Integración del índice de butacas y de cancelación; casos de autorización de los endpoints nuevos | Vitest + Testing Library (D5): `httpClient`, `session`, `fieldValidation`, `EntityForm`, `useEntityCrud`, `SeatMap` | #21 | ⏳ |
-| **7. Cierre** | README final, revisión de todo el diff | Estilos y accesibilidad, README, `globalIgnores` de `CinemapiPhone` | #17, #18 restantes, #23 (solo si el profe lo confirma), #24, #29, #30 | ⏳ |
+| **7. Cierre** | README final con diagramas, `docs/defensa.md`, `WebApi.http` completo, verificación completa | README con diagramas, `globalIgnores` de `CinemapiPhone` | #17, #18 restantes, #23 (solo si el profe lo confirma), #24, #29, #30 | ✅ README, defensa, `WebApi.http` y verificación (27/10); los hallazgos #17–#30 que quedan siguen anotados en la auditoría |
 
 Los tests de cada servicio nuevo van **en la misma tarea** que el servicio (Definition of Done del backend), y los casos 401/403 de cada endpoint nuevo se suman a `AuthorizationTests`.
 

@@ -2,6 +2,123 @@
 
 API REST para la gestión de un complejo de cines (.NET 10, EF Core 10, SQL Server LocalDB). La consume el front web `CinemAPIFront/cine-frontend`.
 
+Qué resuelve: cartelera pública, compra de entradas con butaca numerada y cargo por servicio, cancelación, ventas y reportes para el staff, y administración de catálogo, usuarios y cargos con tres roles (SuperAdmin, Admin, Client). La guía para la defensa está en [`docs/defensa.md`](docs/defensa.md).
+
+## Arquitectura
+
+Clean Architecture con cuatro proyectos y una regla de dependencias que verifica `LayerDependencyTests`:
+
+```mermaid
+flowchart LR
+    subgraph WebApi
+        C[Controllers delgados]
+        H[GlobalExceptionHandler<br/>excepción de dominio → ProblemDetails]
+        S[Security: JWT, políticas, ICurrentUser]
+    end
+    subgraph Application
+        SV[Servicios = casos de uso]
+        D[DTOs + mapeo manual]
+    end
+    subgraph Domain
+        E[Entidades]
+        I[Interfaces de repositorio]
+        X[Excepciones de dominio]
+    end
+    subgraph Infrastructure
+        R[Repositorios EF Core]
+        CTX[CinemAPIContext = IUnitOfWork]
+        M[Migraciones + seeders]
+    end
+    WebApi --> Application --> Domain
+    Infrastructure --> Application
+    CTX --> DB[(SQL Server LocalDB)]
+```
+
+Un pedido entra por un controller (que solo recibe y devuelve DTOs), el servicio aplica las reglas usando interfaces de repositorio, guarda una vez con `IUnitOfWork.SaveChangesAsync` y cualquier regla violada sale como una excepción de dominio que el handler global traduce a ProblemDetails (`NotFoundException` → 404, `ConflictException` → 409, `ForbiddenException` → 403, `BusinessRuleException` → 400).
+
+### Modelo de datos
+
+```mermaid
+erDiagram
+    GENRE ||--o{ MOVIE : clasifica
+    MOVIE ||--o{ SHOWTIME : "se proyecta en"
+    SCREEN ||--o{ SHOWTIME : aloja
+    SHOWTIME ||--o{ PURCHASE : vende
+    USER ||--o{ PURCHASE : compra
+    FEE |o--o{ PURCHASE : "se aplicó a"
+    PURCHASE ||--|{ TICKET : contiene
+    SHOWTIME ||--o{ TICKET : ocupa
+
+    MOVIE {
+        guid Id
+        string Title
+        int DurationMinutes
+        bool IsShowing
+        date ReleaseDate
+    }
+    SCREEN {
+        guid Id
+        string Name
+        int Rows
+        int SeatsPerRow
+    }
+    SHOWTIME {
+        guid Id
+        datetime StartTime
+        decimal Price
+    }
+    PURCHASE {
+        guid Id
+        datetime CreatedAt
+        decimal Subtotal
+        decimal FeeAmount
+        decimal Total
+        string Status
+    }
+    TICKET {
+        guid Id
+        int SeatRow
+        int SeatNumber
+        decimal Price
+        bool IsCancelled
+    }
+    FEE {
+        guid Id
+        decimal Percentage
+        decimal FixedAmount
+        bool IsCurrent
+    }
+    USER {
+        guid Id
+        string Email
+        string PasswordHash
+        string Role
+    }
+```
+
+Todas las entidades tienen `IsActive` (baja lógica con filtro global). Dos índices únicos filtrados sostienen las reglas de concurrencia: una butaca vendida por función (`Tickets (ShowtimeId, SeatRow, SeatNumber) WHERE IsCancelled = 0 AND IsActive = 1`) y un solo cargo vigente (`Fees (IsCurrent) WHERE IsCurrent = 1 AND IsActive = 1`).
+
+### Compra de una butaca (y la carrera)
+
+```mermaid
+sequenceDiagram
+    actor A as Cliente A
+    actor B as Cliente B
+    participant API as PurchaseService
+    participant DB as SQL Server
+    A->>API: POST /api/purchase (A5)
+    B->>API: POST /api/purchase (A5)
+    API->>DB: ¿A5 libre? (los dos ven que sí)
+    API->>DB: INSERT compra de A
+    DB-->>API: OK
+    API-->>A: 201 Created
+    API->>DB: INSERT compra de B
+    DB-->>API: índice único violado (2601)
+    API-->>B: 409 "Alguna de las butacas elegidas se acaba de vender…"
+```
+
+La validación del servicio da el mensaje amable; el índice único decide la carrera. Lo prueban `PurchaseIntegrationTests` (carrera forzada contra la base) y `PurchaseApiTests` (8 compradores a la vez por HTTP).
+
 ## Requisitos
 
 - .NET SDK 10
@@ -98,6 +215,10 @@ Reglas: la función no empezó, la película está en cartelera, de 1 a 10 butac
 
 La migración `AddSeatLayoutFeesAndPurchases` convierte la capacidad de cada sala en filas × 10 butacas y pasa los tickets viejos a compras con butaca; los que no tienen ninguna función de su película en su sala (o no entran en ella) se borran. El detalle está en el comentario de la migración.
 
+## Probar la API a mano
+
+`WebApi/WebApi.http` tiene un pedido por endpoint (Visual Studio, Rider o la extensión REST Client de VS Code): login de cada rol, cartelera, compra y cancelación, ventas, reportes, cargos y usuarios. Se pega el token del login en la variable `@token...` correspondiente.
+
 ## Verificación
 
 ```bash
@@ -105,3 +226,17 @@ dotnet build CinemAPI.slnx
 dotnet test CinemAPI.slnx             # incluye integración contra LocalDB (bases temporales)
 dotnet format CinemAPI.slnx --verify-no-changes
 ```
+
+| Tipo de test | Qué cubre |
+|---|---|
+| Servicios (`Application/Services`) | Cada regla de negocio con fakes en memoria y `FixedTimeProvider` |
+| Integración (`Infrastructure`) | Consultas traducidas por SQL Server real, índices únicos, carreras, rollback de transacciones, la migración de tickets y los reportes |
+| API (`WebApi`) | `WebApplicationFactory`: matriz de autorización 401/403/200 por endpoint, validaciones 400, flujo de compra por HTTP y la carrera de 8 compradores |
+| Arquitectura | Regla de dependencias entre capas y contratos de DTOs |
+
+## Documentación
+
+- [`docs/defensa.md`](docs/defensa.md): resumen para la defensa (decisiones, demo paso a paso, preguntas probables).
+- [`docs/plan-entrega.md`](docs/plan-entrega.md): plan por tareas y qué se entregó en cada una.
+- [`docs/auditoria-backend.md`](docs/auditoria-backend.md): auditoría inicial y convenciones que salieron de ella.
+- `CLAUDE.md`: reglas del repo (capas, convenciones, Definition of Done).
