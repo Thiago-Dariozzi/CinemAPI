@@ -69,6 +69,17 @@ Autenticación: `POST /api/auth/login` devuelve `{ token, expiresAt, user }`; el
 | `GET /api/movie/active?genreId=&date=2026-11-02` | Películas en cartelera; `genreId` filtra por género y `date` (`yyyy-MM-dd`, hora local del cine) deja solo las que tienen alguna función ese día que todavía no empezó, en una sala activa (un día pasado no tiene ninguna). Fecha o Guid inválidos → 400 |
 | `GET /api/movie/{id}/showtimes` | Funciones futuras de la película agrupadas por día: `[{ date, showtimes: [{ id, startTime, screenId, screenName, price, totalSeats, availableSeats }] }]`. Vacío si no está en cartelera; 404 si no existe; omite las funciones de salas dadas de baja. Tres consultas en total (funciones, salas y ventas agrupadas) |
 
+## Reportes (staff)
+
+| Endpoint | Qué devuelve |
+|---|---|
+| `GET /api/reports/sales?from=2026-10-01&to=2026-10-31` | Compras confirmadas hechas en esos días (ambos incluidos, máximo 366): compras, entradas vendidas, entradas canceladas, recaudación de entradas, cargos cobrados, total y el desglose por película (de mayor a menor) |
+| `GET /api/reports/occupancy?date=2026-10-27` | Funciones que empiezan ese día con capacidad, vendidas y `occupancyPercentage` (un decimal), y la ocupación del día (butacas vendidas / butacas totales) |
+
+Fecha faltante o inválida, `from` posterior a `to` o más de 366 días → 400 (ProblemDetails). Sin token → 401; cliente → 403.
+
+Las sumas y los conteos los hace SQL Server (`GROUP BY` con proyecciones en `ReportRepository`); el servicio solo arma los totales con las filas ya agrupadas. Las películas y salas dadas de baja después de vender siguen en el reporte. La capacidad es la de la sala hoy.
+
 ## Compra de entradas
 
 | Endpoint | Quién | Qué hace |

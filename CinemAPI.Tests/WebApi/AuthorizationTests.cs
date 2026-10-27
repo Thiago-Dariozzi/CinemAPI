@@ -47,6 +47,22 @@ public sealed class AuthorizationTests(ApiFixture api)
         { Anonymous, "GET", "/api/movie/active?genreId=abc", null, HttpStatusCode.BadRequest },
         { Anonymous, "GET", $"/api/movie/{NoSuchId}/showtimes", null, HttpStatusCode.NotFound },
 
+        // Reports: solo staff; las fechas son obligatorias y el rango tiene que ser válido
+        { Anonymous, "GET", "/api/reports/sales?from=2026-10-01&to=2026-10-31", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", "/api/reports/sales?from=2026-10-01&to=2026-10-31", null, HttpStatusCode.Forbidden },
+        { "Admin", "GET", "/api/reports/sales?from=2026-10-01&to=2026-10-31", null, HttpStatusCode.OK },
+        { "SuperAdmin", "GET", "/api/reports/sales?from=2026-10-01&to=2026-10-31", null, HttpStatusCode.OK },
+        { "Admin", "GET", "/api/reports/sales?from=2026-10-01", null, HttpStatusCode.BadRequest },
+        { "Admin", "GET", "/api/reports/sales?from=2026-10-31&to=2026-10-01", null, HttpStatusCode.BadRequest },
+        { "Admin", "GET", "/api/reports/sales?from=2025-01-01&to=2026-12-31", null, HttpStatusCode.BadRequest },
+        { Anonymous, "GET", "/api/reports/occupancy?date=2026-10-27", null, HttpStatusCode.Unauthorized },
+        { "Client", "GET", "/api/reports/occupancy?date=2026-10-27", null, HttpStatusCode.Forbidden },
+        { "Admin", "GET", "/api/reports/occupancy?date=2026-10-27", null, HttpStatusCode.OK },
+        { "SuperAdmin", "GET", "/api/reports/occupancy?date=2026-10-27", null, HttpStatusCode.OK },
+        { "Admin", "GET", "/api/reports/occupancy", null, HttpStatusCode.BadRequest },
+        { "Admin", "GET", "/api/reports/occupancy?date=ayer", null, HttpStatusCode.BadRequest },
+        { "Admin", "GET", "/api/reports/occupancy?date=9999-12-31", null, HttpStatusCode.BadRequest },
+
         // Genre: lectura pública, escritura staff
         { Anonymous, "GET", "/api/genre", null, HttpStatusCode.OK },
         { Anonymous, "POST", "/api/genre", """{"name":"{unique}"}""", HttpStatusCode.Unauthorized },

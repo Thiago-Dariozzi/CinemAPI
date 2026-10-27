@@ -191,3 +191,27 @@ public sealed class FakePurchaseRepository(
                 .Select(t => new PurchasedSeat(t.Id, t.SeatRow, t.SeatNumber, t.Price)).ToList());
     });
 }
+
+// Devuelve lo que el test le carga y guarda el período que le pidieron (la agregación real la prueba el test
+// de integración contra LocalDB).
+public sealed class FakeReportRepository : IReportRepository
+{
+    public List<MovieSalesStat> Sales { get; } = [];
+    public List<ShowtimeSeatsStat> Seats { get; } = [];
+    public int CancelledTickets { get; set; }
+    public (DateTime From, DateTime To)? LastPeriod { get; private set; }
+
+    public Task<IReadOnlyList<MovieSalesStat>> GetSalesByMovieAsync(DateTime start, DateTime end, CancellationToken ct)
+    {
+        LastPeriod = (start, end);
+        return Task.FromResult<IReadOnlyList<MovieSalesStat>>(Sales);
+    }
+
+    public Task<int> CountCancelledTicketsAsync(DateTime start, DateTime end, CancellationToken ct) => Task.FromResult(CancelledTickets);
+
+    public Task<IReadOnlyList<ShowtimeSeatsStat>> GetShowtimeSeatsAsync(DateTime start, DateTime end, CancellationToken ct)
+    {
+        LastPeriod = (start, end);
+        return Task.FromResult<IReadOnlyList<ShowtimeSeatsStat>>(Seats);
+    }
+}

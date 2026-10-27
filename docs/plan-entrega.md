@@ -150,12 +150,12 @@ Leyenda: 🌐 anónimo · 🔑 cualquier usuario autenticado · 👤 Client · �
 
 El CRUD libre de tickets desaparece: un ticket solo nace dentro de una compra y se cancela con ella. Las entradas se ven dentro de cada compra.
 
-### Reportes — `ReportController` ✚ (🛠)
+### Reportes — `ReportsController` ✚ (🛠)
 
 | Ruta | Devuelve |
 |---|---|
-| `GET /api/report/sales?from=&to=` | Total recaudado, cargos cobrados, entradas vendidas y canceladas, desglose por película |
-| `GET /api/report/occupancy?from=&to=` | Por función: vendidas / capacidad / % |
+| `GET /api/reports/sales?from=&to=` | Total recaudado, cargos cobrados, entradas vendidas y canceladas, desglose por película |
+| `GET /api/reports/occupancy?date=` | Por función del día: vendidas / capacidad / %, y el total del día (el pedido del 27/10 lo cambió de rango a un día) |
 
 Consultas agregadas en el repositorio (`GroupBy` traducible a SQL, `AsNoTracking`, filtros por rango de fechas).
 
@@ -194,7 +194,7 @@ Cada tarea toca los dos repos y termina con los dos funcionando de punta a punta
 | **2. Cargos (Fee)** | `Fee` con Guid + `IsCurrent`, migración `AddFees`, `FeeService`/`FeeController` (SuperAdmin), `GET /api/fee/current` | Pantalla Cargos con genéricos (reemplaza la página pendiente) | — | ✅ (ABM en la entrega "Tarea 3 (SuperAdmin)") |
 | **3. Salas con butacas y catálogo** | `Screen.Rows`/`SeatsPerRow`, migración `AddScreenSeatLayout`, `GET /api/showtime/{id}/seats`, `/showtime/upcoming` | Salas con filas × butacas; Movies: fecha de estreno, `MovieCard` → `EntityCard`, `MovieFunctionsPanel` → `useMovieShowtimes` + subcomponentes con salas/películas cargadas una vez | #8, #10 (Movies), #11, #13 (`useEntityList` con error), #16 (D2) | ◐ salas y butacas ✅; falta Movies (#8, #10, #11, #13, #16) |
 | **4. Compra de entradas** | `Purchase`, `Ticket` por función + butaca, migración `AddPurchasesAndSeatTickets` (borra los tickets actuales, P1), `PurchaseService` (reglas, cargo, índice único), `POST /api/purchase`, `GET /mine`, cancelación | Detalle de película → funciones → `SeatMap` → confirmar; Mis compras con cancelación. Se borran `Tickets/` y `TicketController` | #7–#10, #12, #14, #18, #28 (Users/Tickets: Tickets desaparece; Clientes/Administradores pasan a genéricos acá) | ✅ (migración migra los tickets en lugar de borrarlos) |
-| **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportController` | Ventas y Reportes | — | ◐ ventas ✅; faltan reportes |
+| **5. Ventas y reportes** | `GET /api/purchase` con filtros, cancelación por staff, `ReportsController` | Ventas y Reportes | — | ✅ |
 | **6. Tests** | Integración del índice de butacas y de cancelación; casos de autorización de los endpoints nuevos | Vitest + Testing Library (D5): `httpClient`, `session`, `fieldValidation`, `EntityForm`, `useEntityCrud`, `SeatMap` | #21 | ⏳ |
 | **7. Cierre** | README final, revisión de todo el diff | Estilos y accesibilidad, README, `globalIgnores` de `CinemapiPhone` | #17, #18 restantes, #23 (solo si el profe lo confirma), #24, #29, #30 | ⏳ |
 
@@ -218,6 +218,11 @@ El pedido juntó en una sola tarea lo que acá eran las tareas 2, 3, 4 y la part
 
 - Back: `GET /api/movie/active` acepta `genreId` y `date` (películas con funciones ese día que no empezaron); `GET /api/movie/{id}/showtimes` devuelve las funciones futuras agrupadas por día con butacas libres (sin N+1). Ambos públicos.
 - Front: cartelera pública en `/cartelera` y ficha en `/cartelera/:movieId` (afiche, sinopsis, duración, género, estreno y horarios por día con butacas libres), filtros por día y género en la URL, estados de carga, vacío y error. "Comprar" sin sesión lleva al login y vuelve a la película. El cliente usa la barra superior pública en todo su recorrido; la barra lateral queda para el staff. `/panel/cartelera` y `/panel/peliculas/:id` redirigen a las rutas nuevas. Las pantallas que no son públicas se cargan aparte (`React.lazy`).
+
+### Reportes entregados (pedido del 27/10)
+
+- Back: `ReportsController` (`/api/reports`, staff): `GET sales?from&to` (compras confirmadas por día de compra, máximo 366 días; totales, cargos, canceladas y desglose por película) y `GET occupancy?date` (ocupación por función y del día). Agregado en SQL con `IReportRepository`/`ReportRepository`; tests de servicio, de integración contra LocalDB y de permisos.
+- Front: `/admin/reportes` con rango de fechas y atajos, tarjetas de totales, tabla por película y tabla de ocupación por función con barras (`ProgressBar` de react-bootstrap).
 
 ### Decisiones aplicadas en la Tarea 1 (cambian el plan original)
 

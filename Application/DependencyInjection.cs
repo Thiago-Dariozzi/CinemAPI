@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IFeeService, FeeService>();
         services.AddScoped<IPurchaseService, PurchaseService>();
+        services.AddScoped<IReportService, ReportService>();
 
         // La hora de las reglas de compra y cancelación; los tests usan una fija.
         services.TryAddSingleton(TimeProvider.System);
