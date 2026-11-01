@@ -1,4 +1,6 @@
-using System;
+using Application.DTOs.Showtimes;
+using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -6,104 +8,187 @@ using Domain.Interfaces;
 namespace Application.Services;
 
 // Orquesta IShowtimeRepository + IMovieRepository (necesito la duración de la
-// película para calcular solapamientos). La llama ShowtimeController.
-public class ShowtimeService
+// película para calcular solapamientos) + IScreenRepository (la sala tiene que existir)
+// + ITicketRepository (butacas vendidas: el mapa y lo que no se puede tocar de una función con ventas).
+public sealed class ShowtimeService(
+    IShowtimeRepository showtimeRepository,
+    IMovieRepository movieRepository,
+    IScreenRepository screenRepository,
+    ITicketRepository ticketRepository,
+    TimeProvider timeProvider,
+    IUnitOfWork unitOfWork) : IShowtimeService
 {
-    // Minutos de limpieza que se suman a la duración de la película para calcular el
-    // tramo real que ocupa una función en la sala.
-    private const int CLEANING_BUFFER_MINUTES = 15;
+    private const string EntityName = "la función";
 
-    private readonly IShowtimeRepository _repo;
-    private readonly IMovieRepository _movieRepo;
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetAllAsync(CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetAllAsync(ct));
 
-    public ShowtimeService(IShowtimeRepository showtimeRepository, IMovieRepository movieRepository)
+    public async Task<ShowtimeResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
+
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetByMovieIdAsync(movieId, ct));
+
+    // Las que todavía no empezaron, de una película o de todas. No mira si la película está en cartelera:
+    // eso lo informa el mapa de butacas (IsOnSale) y lo valida la compra.
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetUpcomingAsync(Guid? movieId, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetUpcomingAsync(movieId, timeProvider.Now(), ct));
+
+    // Cartelera de una sala en un día (la usa el calendario del front).
+    public async Task<IReadOnlyList<ShowtimeResponse>> GetByScreenAndDateAsync(
+        Guid screenId, DateOnly date, CancellationToken ct) =>
+        ToResponses(await showtimeRepository.GetByScreenAndDateAsync(screenId, date.ToDateTime(TimeOnly.MinValue), ct));
+
+    public async Task<SeatMapResponse> GetSeatMapAsync(Guid id, CancellationToken ct)
     {
-        _repo = showtimeRepository;
-        _movieRepo = movieRepository;
+        var showtime = await GetEntityAsync(id, ct);
+        var screen = await screenRepository.GetByIdAsync(showtime.ScreenId, ct)
+            ?? throw new BusinessRuleException("La sala de esta función no está disponible.");
+        var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct);
+        var taken = await ticketRepository.GetTakenSeatsAsync(id, ct);
+        var isOnSale = movie is { IsShowing: true } && showtime.StartTime > timeProvider.Now();
+
+        return new SeatMapResponse(
+            showtime.Id,
+            showtime.MovieId,
+            movie?.Title ?? "Película no disponible",
+            screen.Id,
+            screen.Name,
+            showtime.StartTime,
+            showtime.Price,
+            screen.Rows,
+            screen.SeatsPerRow,
+            isOnSale,
+            taken.Select(s => new SeatResponse(s.Row, s.Number)).ToList());
     }
 
-    public async Task<IEnumerable<Showtime>> GetAll()
+    // Tres consultas en total (funciones, salas y ventas por función), nunca una por función. Las funciones
+    // de una sala dada de baja no se listan: no tienen mapa de butacas.
+    public async Task<IReadOnlyList<ShowtimeDayResponse>> GetScheduleByMovieAsync(Guid movieId, CancellationToken ct)
     {
-        return await _repo.GetAll();
-    }
+        var movie = await movieRepository.GetByIdAsync(movieId, ct) ?? throw new NotFoundException("la película", movieId);
+        if (!movie.IsShowing)
+        {
+            return [];
+        }
 
-    public async Task<Showtime?> GetById(Guid id)
-    {
-        return await _repo.GetById(id);
-    }
+        var now = timeProvider.Now();
+        var showtimes = await showtimeRepository.GetUpcomingAsync(movieId, now, ct);
+        if (showtimes.Count == 0)
+        {
+            return [];
+        }
 
-    public async Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId)
-    {
-        return await _repo.GetByMovieId(movieId);
-    }
+        var screens = (await screenRepository.GetAllAsync(ct)).ToDictionary(s => s.Id);
+        var sold = await ticketRepository.CountSoldByShowtimeAsync(movieId, now, ct);
 
-    // Reusado por ValidateNoOverlap para traer las candidatas a chocar.
-    public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date)
-    {
-        return await _repo.GetByScreenAndDate(screenId, date);
+        return showtimes
+            .Where(s => screens.ContainsKey(s.ScreenId))
+            .Select(s =>
+            {
+                var screen = screens[s.ScreenId];
+                var available = Math.Max(0, screen.Capacity - sold.GetValueOrDefault(s.Id));
+                return new ShowtimeAvailabilityResponse(s.Id, s.StartTime, screen.Id, screen.Name, s.Price, screen.Capacity, available);
+            })
+            .GroupBy(s => DateOnly.FromDateTime(s.StartTime))
+            .Select(day => new ShowtimeDayResponse(day.Key, day.ToList()))
+            .ToList();
     }
 
     // Id lo generamos acá, no lo mandamos a confiar del cliente.
-    public async Task<Showtime> Add(Showtime showtime)
+    public async Task<ShowtimeResponse> CreateAsync(CreateShowtimeRequest request, CancellationToken ct)
     {
+        var showtime = request.ToEntity();
         showtime.Id = Guid.NewGuid();
         showtime.IsActive = true;
-        await ValidateNoOverlap(showtime);
-        return await _repo.Add(showtime);
+        await ValidateNoOverlapAsync(showtime, previous: null, ct);
+
+        showtimeRepository.Add(showtime);
+        await unitOfWork.SaveChangesAsync(ct);
+        return showtime.ToResponse();
     }
 
-    // Re-valida solapamiento con los nuevos datos (ValidateNoOverlap excluye el propio
-    // Id, así que no choca contra sí mismo).
-    public async Task Update(Showtime showtime)
+    // Valida con los datos nuevos antes de tocar la entidad trackeada (ValidateNoOverlapAsync
+    // excluye el propio Id, así que no choca contra sí misma).
+    public async Task UpdateAsync(Guid id, UpdateShowtimeRequest request, CancellationToken ct)
     {
-        await ValidateNoOverlap(showtime);
-        await _repo.Update(showtime);
+        var existing = await GetEntityAsync(id, ct);
+        var updated = request.ToEntity(id);
+        // Con entradas vendidas no se cambia el horario, la sala ni la película: las entradas dejarían de
+        // corresponder a lo que se compró. El precio sí, porque cada entrada guarda el que pagó.
+        var changesWhatWasSold = updated.ScreenId != existing.ScreenId
+            || updated.MovieId != existing.MovieId
+            || updated.StartTime != existing.StartTime;
+        if (changesWhatWasSold && await ticketRepository.HasSoldTicketsAsync(id, ct))
+        {
+            throw new ShowtimeConflictException(
+                "La función tiene entradas vendidas: no se puede cambiar el horario, la sala ni la película.");
+        }
+
+        await ValidateNoOverlapAsync(updated, previous: existing, ct);
+
+        existing.MovieId = updated.MovieId;
+        existing.ScreenId = updated.ScreenId;
+        existing.StartTime = updated.StartTime;
+        existing.Price = updated.Price;
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
     // Soft delete: apaga IsActive en vez de borrar la fila.
-    public async Task Delete(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var showtime = await _repo.GetById(id);
-        if (showtime != null)
+        var showtime = await GetEntityAsync(id, ct);
+        if (await ticketRepository.HasSoldTicketsAsync(id, ct))
         {
-            showtime.IsActive = false;
-            await _repo.Update(showtime);
+            throw new ShowtimeConflictException("La función tiene entradas vendidas: cancelá esas compras antes de borrarla.");
         }
+
+        showtime.IsActive = false;
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
+    private async Task<Showtime> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await showtimeRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    private static List<ShowtimeResponse> ToResponses(IEnumerable<Showtime> showtimes) =>
+        showtimes.Select(s => s.ToResponse()).ToList();
+
     // El tramo que ocupa una función es [StartTime, StartTime + duración de la película
-    // + CLEANING_BUFFER_MINUTES]; dos tramos chocan si se cruzan aunque sea
-    // parcialmente (tocarse justo en el borde no cuenta como choque). Solo compara
-    // funciones del mismo día calendario que StartTime: no hay funciones que crucen
-    // la medianoche.
-    private async Task ValidateNoOverlap(Showtime showtime)
+    // + CleaningBufferMinutes]; dos tramos chocan si se cruzan aunque sea
+    // parcialmente (tocarse justo en el borde no cuenta como choque).
+    // En una edición solo se validan las referencias que cambian (igual que en Movie y Ticket): una
+    // función de una película ya dada de baja se puede seguir reprogramando.
+    private async Task ValidateNoOverlapAsync(Showtime showtime, Showtime? previous, CancellationToken ct)
     {
-        var movie = await _movieRepo.GetById(showtime.MovieId);
-        if (movie == null)
+        int durationMinutes;
+        if (showtime.MovieId != previous?.MovieId)
         {
-            throw new ShowtimeConflictException($"No se encontró la película con Id {showtime.MovieId}.");
+            var movie = await movieRepository.GetByIdAsync(showtime.MovieId, ct)
+                ?? throw new InvalidReferenceException("la película", showtime.MovieId);
+            durationMinutes = movie.DurationMinutes;
+        }
+        else
+        {
+            durationMinutes = await movieRepository.GetDurationIncludingDeletedAsync(showtime.MovieId, ct)
+                ?? throw new InvalidReferenceException("la película", showtime.MovieId);
+        }
+
+        if (showtime.ScreenId != previous?.ScreenId && !await screenRepository.ExistsAsync(showtime.ScreenId, ct))
+        {
+            throw new InvalidReferenceException("la sala", showtime.ScreenId);
         }
 
         var newStart = showtime.StartTime;
-        var newEnd = newStart.AddMinutes(movie.DurationMinutes + CLEANING_BUFFER_MINUTES);
+        var newEnd = newStart.AddMinutes(durationMinutes + Showtime.CleaningBufferMinutes);
 
-        // Traigo todas las funciones activas de esa sala en ese día y comparo en memoria.
-        var candidates = await _repo.GetByScreenAndDate(showtime.ScreenId, newStart.Date);
+        // Candidatas: las que empiezan desde 24 h antes (ninguna película dura un día, así que una
+        // función de la noche anterior que cruce la medianoche entra) hasta el fin de la nueva.
+        var occupied = await showtimeRepository.GetOccupancyByScreenAsync(
+            showtime.ScreenId, newStart.AddDays(-1), newEnd, ct);
 
-        // Cache para no pedir la misma película dos veces si hay varias candidatas.
-        var movieCache = new Dictionary<Guid, Movie?> { [movie.Id] = movie };
-
-        foreach (var other in candidates)
+        foreach (var other in occupied.Where(o => o.ShowtimeId != showtime.Id))
         {
-            if (other.Id == showtime.Id) continue; // excluye el propio registro (caso Update)
-
-            if (!movieCache.TryGetValue(other.MovieId, out var otherMovie))
-            {
-                otherMovie = await _movieRepo.GetById(other.MovieId);
-                movieCache[other.MovieId] = otherMovie;
-            }
-
-            var otherEnd = other.StartTime.AddMinutes((otherMovie?.DurationMinutes ?? 0) + CLEANING_BUFFER_MINUTES);
+            var otherEnd = other.StartTime.AddMinutes(other.DurationMinutes + Showtime.CleaningBufferMinutes);
 
             // Choque clásico de intervalos: se pisan si cada uno empieza antes de que
             // termine el otro. Con < (no <=) tocarse justo en el borde no cuenta.
@@ -111,8 +196,8 @@ public class ShowtimeService
             if (overlaps)
             {
                 throw new ShowtimeConflictException(
-                    $"La sala ya tiene programada la función '{otherMovie?.Title ?? "otra película"}' " +
-                    $"(Showtime Id {other.Id}) de {other.StartTime:HH:mm} a {otherEnd:HH:mm} el " +
+                    $"La sala ya tiene programada la función '{other.MovieTitle}' " +
+                    $"(Showtime Id {other.ShowtimeId}) de {other.StartTime:HH:mm} a {otherEnd:HH:mm} el " +
                     $"{other.StartTime:dd/MM/yyyy}; esta función se superpone con esa franja.");
             }
         }

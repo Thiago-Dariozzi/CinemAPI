@@ -1,101 +1,80 @@
-using System;
+using Application.DTOs.Users;
+using Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Application.DTOs;
-using Application.Services;
-using Domain.Entities;
+using WebApi.Security;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController : ControllerBase
+[Authorize(Policy = Policies.Staff)]
+public sealed class UserController(IUserService userService) : ControllerBase
 {
-    private readonly UserService _userService;
-
-    public UserController(UserService userService)
-    {
-        _userService = userService;
-    }
-
-    // GET: api/user
+    // GET api/user?role=Client&search=ana — incluye a los dados de baja (isActive = false).
     [HttpGet]
-    public async Task<IActionResult> GetUsers()
-    {
-        var users = await _userService.GetAll();
-        return Ok(users.Select(ToDto));
-    }
+    [ProducesResponseType<IReadOnlyList<UserResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<UserResponse>>> GetUsers(
+        [FromQuery] string? role, [FromQuery] string? search, CancellationToken ct) =>
+        Ok(await userService.GetAllAsync(role, search, ct));
 
-    // GET: api/user/{id}
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetUser(Guid id)
-    {
-        var user = await _userService.GetById(id);
-        if (user == null)
-        {
-            return NotFound();
-        }
-        return Ok(ToDto(user));
-    }
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<UserResponse>> GetUser(Guid id, CancellationToken ct) =>
+        Ok(await userService.GetByIdAsync(id, ct));
 
-    // GET: api/user/email/{email}
-    [HttpGet("email/{email}")]
-    public async Task<IActionResult> GetByEmail(string email)
-    {
-        var user = await _userService.GetByEmail(email);
-        if (user == null)
-        {
-            return NotFound();
-        }
-        return Ok(ToDto(user));
-    }
-
-    // POST: api/user
     [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] User user)
+    [ProducesResponseType<UserResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<UserResponse>> CreateUser(CreateUserRequest request, CancellationToken ct)
     {
-        var existing = await _userService.GetByEmail(user.Email);
-        if (existing != null)
-        {
-            return Conflict("Ya existe un usuario con ese email.");
-        }
-
-        var created = await _userService.Add(user);
-        return CreatedAtAction(nameof(GetUser), new { id = created!.Id }, ToDto(created));
+        var created = await userService.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetUser), new { id = created.Id }, created);
     }
 
-    // PUT: api/user/{id}
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateUser(Guid id, [FromBody] User user)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateUser(Guid id, UpdateUserRequest request, CancellationToken ct)
     {
-        if (id != user.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del usuario.");
-        }
-
-        var existing = await _userService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
-        await _userService.Update(user);
+        await userService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 
-    // DELETE: api/user/{id}
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteUser(Guid id)
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
     {
-        var existing = await _userService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
-        await _userService.Delete(id);
+        await userService.DeleteAsync(id, ct);
         return NoContent();
     }
 
-    private static UserResponseDto ToDto(User user) =>
-        new(user.Id, user.Name, user.Email, user.Role, user.IsActive);
+    // POST y no PUT: no se manda el usuario, solo se deshace la baja lógica.
+    [HttpPost("{id:guid}/reactivate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ReactivateUser(Guid id, CancellationToken ct)
+    {
+        await userService.ReactivateAsync(id, ct);
+        return NoContent();
+    }
 }

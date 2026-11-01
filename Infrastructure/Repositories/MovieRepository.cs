@@ -1,51 +1,38 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class MovieRepository : BaseRepository<Movie>, IMovieRepository
+public sealed class MovieRepository(CinemAPIContext context) : BaseRepository<Movie>(context), IMovieRepository
 {
-    public MovieRepository(CinemAPIContext context) : base(context)
-    {
-    }
+    // Cartelera: activas (filtro global) y en cartelera.
+    public async Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(Guid? genreId, CancellationToken ct) =>
+        await Context.Movies.AsNoTracking()
+            .Where(m => m.IsShowing && (genreId == null || m.GenreId == genreId))
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync(ct);
 
-    public new async Task<IEnumerable<Movie>> GetAll()
-    {
-        return await _context.Movies
-        .Where(m => m.IsActive)
-        .ToListAsync();
-    }
+    public async Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
+        await Context.Movies.AsNoTracking()
+            .Where(m => m.GenreId == genreId)
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync(ct);
 
-    public new async Task<Movie?> GetById(Guid id)
-    {
-        return await _context.Movies
-        .FirstOrDefaultAsync(m => m.Id == id && m.IsActive);
-    }
+    public Task<int> CountByGenreAsync(Guid genreId, CancellationToken ct) =>
+        Context.Movies.CountAsync(m => m.GenreId == genreId, ct);
 
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
-    {
-        return await _context.Movies
-        .Where(m => m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
+    public Task<int?> GetDurationIncludingDeletedAsync(Guid movieId, CancellationToken ct) =>
+        Context.Movies.IgnoreQueryFilters()
+            .Where(m => m.Id == movieId)
+            .Select(m => (int?)m.DurationMinutes)
+            .FirstOrDefaultAsync(ct);
 
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
-    {
-        return await _context.Movies
-        .Where(m => m.GenreId == genreId && m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
-
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
-    {
-        return await _context.Movies
-        .Where(m => m.Title.ToLower() == title.ToLower() && m.IsActive)
-        .OrderByDescending(m => m.ReleaseDate)
-        .ToListAsync();
-    }
-
+    // Sin ToLower(): la columna usa la collation por defecto de la base (case-insensitive),
+    // así que la comparación ya ignora mayúsculas y puede usar índices.
+    public async Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct) =>
+        await Context.Movies.AsNoTracking()
+            .Where(m => m.Title == title)
+            .OrderByDescending(m => m.ReleaseDate)
+            .ToListAsync(ct);
 }

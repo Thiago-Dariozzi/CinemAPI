@@ -1,87 +1,90 @@
-using Application.Services;
-using Domain.Entities;
+using Application.DTOs.Movies;
+using Application.DTOs.Showtimes;
+using Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System;
+using WebApi.Security;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MovieController : ControllerBase
+[Authorize(Policy = Policies.Staff)]
+public sealed class MovieController(IMovieService movieService, IShowtimeService showtimeService) : ControllerBase
 {
-    private readonly MovieService _movieService;
-
-    public MovieController(MovieService movieService)
-    {
-        _movieService = movieService; 
-    }
-    
+    // GET api/movie/active?genreId=...&date=2026-11-02 — cartelera; date: películas con funciones ese día.
+    [AllowAnonymous]
     [HttpGet("active")]
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
-    {
-        return await _movieService.GetActiveMovies();
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetShowingMovies(
+        [FromQuery] Guid? genreId, [FromQuery] DateOnly? date, CancellationToken ct) =>
+        Ok(await movieService.GetShowingMoviesAsync(genreId, date, ct));
 
-    [HttpGet("genre/{genreId}")]
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
-    {
-        return await _movieService.GetByGenre(genreId);
-    }
+    // Funciones futuras de la película agrupadas por día, con butacas libres.
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/showtimes")]
+    [ProducesResponseType<IReadOnlyList<ShowtimeDayResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<ShowtimeDayResponse>>> GetSchedule(Guid id, CancellationToken ct) =>
+        Ok(await showtimeService.GetScheduleByMovieAsync(id, ct));
 
+    [AllowAnonymous]
+    [HttpGet("genre/{genreId:guid}")]
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByGenre(Guid genreId, CancellationToken ct) =>
+        Ok(await movieService.GetByGenreAsync(genreId, ct));
+
+    [AllowAnonymous]
     [HttpGet("title/{title}")]
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
-    {
-        return await _movieService.GetByTitle(title);
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetByTitle(string title, CancellationToken ct) =>
+        Ok(await movieService.GetByTitleAsync(title, ct));
 
+    [AllowAnonymous]
     [HttpGet]
-    public async Task<IEnumerable<Movie>> GetAll()
-    {
-        return await _movieService.GetAll();
-    }
+    [ProducesResponseType<IReadOnlyList<MovieResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MovieResponse>>> GetAll(CancellationToken ct) =>
+        Ok(await movieService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(Guid id)
-    {
-        var movie = await _movieService.GetById(id);
-        return movie == null ? NotFound() : Ok(movie);
-    }
+    [AllowAnonymous]
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<MovieResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MovieResponse>> GetById(Guid id, CancellationToken ct) =>
+        Ok(await movieService.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public async Task<Movie?> Add([FromBody] Movie movie)
+    [ProducesResponseType<MovieResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<MovieResponse>> Add(CreateMovieRequest request, CancellationToken ct)
     {
-        return await _movieService.Add(movie);
+        var created = await movieService.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var existing = await _movieService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
- 
-        await _movieService.Delete(id);
+        await movieService.DeleteAsync(id, ct);
         return NoContent();
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] Movie movie)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Update(Guid id, UpdateMovieRequest request, CancellationToken ct)
     {
-        if (id != movie.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id de la película.");
-        }
-
-        var existing = await _movieService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
-        await _movieService.Update(movie);
+        await movieService.UpdateAsync(id, request, ct);
         return NoContent();
     }
 }

@@ -1,6 +1,253 @@
-@WebApi_HostAddress = http://localhost:5288
+# CinemAPI — un pedido por endpoint. Se usa con Visual Studio, Rider o REST Client (VS Code).
+# 1. Levantar la API: dotnet run --project WebApi --launch-profile http
+# 2. Completar las contraseñas (son las de user-secrets: SeedSuperAdmin:Password y DemoUsers:Password).
+# 3. Ejecutar los tres logins y pegar cada "token" en su variable.
+# 4. Completar los Ids de ejemplo con los que devuelven los listados.
 
-GET {{WebApi_HostAddress}}/weatherforecast/
-Accept: application/json
+@base = http://localhost:5288/api
+@superAdminPassword = <SeedSuperAdmin:Password>
+@demoPassword = <DemoUsers:Password>
 
-###
+@tokenSuperAdmin = <pegar token>
+@tokenAdmin = <pegar token>
+@tokenCliente = <pegar token>
+
+@movieId = 00000000-0000-0000-0000-000000000000
+@genreId = 00000000-0000-0000-0000-000000000000
+@screenId = 00000000-0000-0000-0000-000000000000
+@showtimeId = 00000000-0000-0000-0000-000000000000
+@purchaseId = 00000000-0000-0000-0000-000000000000
+@feeId = 00000000-0000-0000-0000-000000000000
+@userId = 00000000-0000-0000-0000-000000000000
+
+########## Autenticación ##########
+
+### Login SuperAdmin
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "superadmin@cinemapi.com", "password": "{{superAdminPassword}}" }
+
+### Login Admin (demo, solo Development)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@cinemapi.com", "password": "{{demoPassword}}" }
+
+### Login Cliente (demo, solo Development)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "cliente@cinemapi.com", "password": "{{demoPassword}}" }
+
+### Login con contraseña incorrecta → 401 con mensaje único
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "cliente@cinemapi.com", "password": "incorrecta" }
+
+### Registro de un cliente nuevo → 201 + token
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{ "name": "Cliente Nuevo", "email": "nuevo@cine.test", "password": "Prueba2026!" }
+
+### Mi perfil
+GET {{base}}/auth/me
+Authorization: Bearer {{tokenCliente}}
+
+### Cambiar mi nombre
+PUT {{base}}/auth/me
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{ "name": "Cliente Demo" }
+
+### Cambiar mi contraseña (400 si la actual no coincide)
+PUT {{base}}/auth/password
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{ "currentPassword": "{{demoPassword}}", "newPassword": "{{demoPassword}}" }
+
+########## Cartelera (pública) ##########
+
+### Películas en cartelera
+GET {{base}}/movie/active
+
+### Cartelera filtrada por género y día
+GET {{base}}/movie/active?genreId={{genreId}}&date=2026-11-02
+
+### Ficha: funciones futuras por día con butacas libres
+GET {{base}}/movie/{{movieId}}/showtimes
+
+### Una película
+GET {{base}}/movie/{{movieId}}
+
+### Géneros
+GET {{base}}/genre
+
+### Próximas funciones (de todas las películas o de una)
+GET {{base}}/showtime/upcoming?movieId={{movieId}}
+
+### Mapa de butacas de una función
+GET {{base}}/showtime/{{showtimeId}}/seats
+
+########## Compra (cliente) ##########
+
+### Cargo vigente (204 si no hay)
+GET {{base}}/fee/current
+Authorization: Bearer {{tokenCliente}}
+
+### Comprar dos butacas (A1 y A2) → 201; repetirlo → 409 butaca vendida
+POST {{base}}/purchase
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{ "showtimeId": "{{showtimeId}}", "seats": [ { "row": 1, "number": 1 }, { "row": 1, "number": 2 } ] }
+
+### Mis compras
+GET {{base}}/purchase/mine
+Authorization: Bearer {{tokenCliente}}
+
+### Una compra (ajena → 403)
+GET {{base}}/purchase/{{purchaseId}}
+Authorization: Bearer {{tokenCliente}}
+
+### Cancelar una compra propia (hasta 2 h antes de la función)
+POST {{base}}/purchase/mine/{{purchaseId}}/cancel
+Authorization: Bearer {{tokenCliente}}
+
+########## Ventas y reportes (staff) ##########
+
+### Ventas con filtros
+GET {{base}}/purchase?from=2026-10-01&to=2026-10-31&status=Confirmed
+Authorization: Bearer {{tokenAdmin}}
+
+### Cancelar cualquier compra (staff, sin límite de tiempo)
+POST {{base}}/purchase/{{purchaseId}}/cancel
+Authorization: Bearer {{tokenAdmin}}
+
+### Reporte de ventas
+GET {{base}}/reports/sales?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{tokenAdmin}}
+
+### Reporte de ocupación de un día
+GET {{base}}/reports/occupancy?date=2026-10-27
+Authorization: Bearer {{tokenAdmin}}
+
+### Reporte pedido por un cliente → 403
+GET {{base}}/reports/sales?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{tokenCliente}}
+
+########## Catálogo (staff) ##########
+
+### Todas las películas (incluye fuera de cartelera)
+GET {{base}}/movie
+
+### Crear película
+POST {{base}}/movie
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "title": "Película de prueba",
+  "synopsis": "Creada desde WebApi.http",
+  "durationMinutes": 110,
+  "genreId": "{{genreId}}",
+  "imageUrl": "",
+  "releaseDate": "2026-11-01T00:00:00",
+  "suggestedPrice": 12.5,
+  "isShowing": true
+}
+
+### Crear género
+POST {{base}}/genre
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "name": "Documental" }
+
+### Salas
+GET {{base}}/screen
+
+### Crear sala de 8 filas × 12 butacas
+POST {{base}}/screen
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "name": "Sala 20", "rows": 8, "seatsPerRow": 12 }
+
+### Dar de baja una sala con funciones próximas → 409
+DELETE {{base}}/screen/{{screenId}}
+Authorization: Bearer {{tokenAdmin}}
+
+### Crear función (409 si se superpone con otra en la sala)
+POST {{base}}/showtime
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "movieId": "{{movieId}}", "screenId": "{{screenId}}", "startTime": "2026-11-05T20:00:00", "price": 15 }
+
+### Reprogramar una función con entradas vendidas → 409
+PUT {{base}}/showtime/{{showtimeId}}
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "movieId": "{{movieId}}", "screenId": "{{screenId}}", "startTime": "2026-11-05T22:00:00", "price": 15 }
+
+########## Usuarios ##########
+
+### Clientes con búsqueda (incluye dados de baja)
+GET {{base}}/user?role=Client&search=cliente
+Authorization: Bearer {{tokenAdmin}}
+
+### Administradores (Admin → 403; SuperAdmin → 200)
+GET {{base}}/user?role=Admin
+Authorization: Bearer {{tokenSuperAdmin}}
+
+### Alta de un Admin con contraseña inicial (solo SuperAdmin)
+POST {{base}}/user
+Authorization: Bearer {{tokenSuperAdmin}}
+Content-Type: application/json
+
+{ "name": "Admin Nuevo", "email": "admin.nuevo@cine.test", "password": "Inicial2026!", "role": "Admin" }
+
+### Dar de baja un usuario
+DELETE {{base}}/user/{{userId}}
+Authorization: Bearer {{tokenSuperAdmin}}
+
+### Reactivarlo (ya activo → 409)
+POST {{base}}/user/{{userId}}/reactivate
+Authorization: Bearer {{tokenSuperAdmin}}
+
+########## Cargos (solo SuperAdmin) ##########
+
+### Cargos
+GET {{base}}/fee
+Authorization: Bearer {{tokenSuperAdmin}}
+
+### Crear un cargo vigente (desmarca al anterior)
+POST {{base}}/fee
+Authorization: Bearer {{tokenSuperAdmin}}
+Content-Type: application/json
+
+{ "name": "Cargo por servicio", "percentage": 10, "fixedAmount": 0, "isCurrent": true }
+
+### Editar un cargo
+PUT {{base}}/fee/{{feeId}}
+Authorization: Bearer {{tokenSuperAdmin}}
+Content-Type: application/json
+
+{ "name": "Cargo por servicio", "percentage": 12.5, "fixedAmount": 50, "isCurrent": true }
+
+### Porcentaje fuera de rango → 400
+POST {{base}}/fee
+Authorization: Bearer {{tokenSuperAdmin}}
+Content-Type: application/json
+
+{ "name": "Inválido", "percentage": 150, "fixedAmount": 0, "isCurrent": false }
+
+### Borrar un cargo
+DELETE {{base}}/fee/{{feeId}}
+Authorization: Bearer {{tokenSuperAdmin}}

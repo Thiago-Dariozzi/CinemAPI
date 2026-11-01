@@ -1,74 +1,69 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using System.Linq;
+using Domain.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-// Re-implemento (con "new") GetAll/GetById/Add/Update/Delete de BaseRepository
-// para filtrar por IsActive y hacer soft delete.
-public class ShowtimeRepository : BaseRepository<Showtime>, IShowtimeRepository
+public sealed class ShowtimeRepository(CinemAPIContext context) : BaseRepository<Showtime>(context), IShowtimeRepository
 {
-    public ShowtimeRepository(CinemAPIContext context) : base(context)
+    public override async Task<IReadOnlyList<Showtime>> GetAllAsync(CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Showtime>> GetByMovieIdAsync(Guid movieId, CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .Where(s => s.MovieId == movieId)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Showtime>> GetUpcomingAsync(Guid? movieId, DateTime after, CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .Where(s => s.StartTime > after && (movieId == null || s.MovieId == movieId))
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> GetMovieIdsWithShowtimesAsync(DateTime from, DateTime to, CancellationToken ct) =>
+        await Context.Showtimes.AsNoTracking()
+            .Where(s => s.StartTime >= from && s.StartTime < to && Context.Screens.Any(sc => sc.Id == s.ScreenId))
+            .Select(s => s.MovieId)
+            .Distinct()
+            .ToListAsync(ct);
+
+    public Task<bool> HasUpcomingByScreenAsync(Guid screenId, DateTime after, CancellationToken ct) =>
+        Context.Showtimes.AnyAsync(s => s.ScreenId == screenId && s.StartTime > after, ct);
+
+    // Rango [día, día + 1) en vez de StartTime.Date == date: así puede usar el índice (ScreenId, StartTime).
+    public async Task<IReadOnlyList<Showtime>> GetByScreenAndDateAsync(Guid screenId, DateTime date, CancellationToken ct)
     {
+        var dayStart = date.Date;
+        var dayEnd = dayStart.AddDays(1);
+        return await Context.Showtimes.AsNoTracking()
+            .Where(s => s.ScreenId == screenId && s.StartTime >= dayStart && s.StartTime < dayEnd)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(ct);
     }
 
-    public new async Task<IEnumerable<Showtime>> GetAll()
+    // IgnoreQueryFilters en películas a propósito: si la película se dio de baja pero la función
+    // sigue activa, la sala sigue ocupada durante toda su duración. La FK garantiza que existe.
+    // IgnoreQueryFilters apaga los filtros de TODA la consulta, así que s.IsActive va explícito: sin él,
+    // una función borrada seguía bloqueando la sala.
+    public async Task<IReadOnlyList<ShowtimeOccupancy>> GetOccupancyByScreenAsync(
+        Guid screenId, DateTime from, DateTime to, CancellationToken ct)
     {
-        return await _context.Showtimes
-        .Where(s => s.IsActive)
-        .OrderBy(s => s.StartTime)
-        .ToListAsync();
-    }
+        var rows = await Context.Showtimes.AsNoTracking()
+            .Where(s => s.IsActive && s.ScreenId == screenId && s.StartTime >= from && s.StartTime < to)
+            .OrderBy(s => s.StartTime)
+            .Join(Context.Movies.IgnoreQueryFilters(), s => s.MovieId, m => m.Id, (s, m) => new
+            {
+                s.Id,
+                s.StartTime,
+                m.DurationMinutes,
+                m.Title,
+            })
+            .ToListAsync(ct);
 
-    // FirstOrDefaultAsync en vez de FindAsync (la base) porque necesito filtrar por
-    // IsActive, no solo buscar por clave.
-    public new async Task<Showtime?> GetById(Guid id)
-    {
-        return await _context.Showtimes
-        .FirstOrDefaultAsync(s => s.Id == id && s.IsActive);
-    }
-
-    public new async Task<Showtime> Add(Showtime showtime)
-    {
-        _context.Showtimes.Add(showtime);
-        await _context.SaveChangesAsync();
-        return showtime;
-    }
-
-    public new async Task Update(Showtime showtime)
-    {
-        // Ver comentario equivalente en BaseRepository.Update / ScreenRepository.Update.
-        _context.ChangeTracker.Clear();
-        _context.Showtimes.Update(showtime);
-        await _context.SaveChangesAsync();
-    }
-
-    // Igual que ShowtimeService.Delete (soft), por si alguien pega al repo directo.
-    public new async Task Delete(Guid id)
-    {
-        var showtime = await GetById(id);
-        if (showtime != null)
-        {
-            showtime.IsActive = false;
-            await _context.SaveChangesAsync();
-        }
-    }
-
-    public async Task<IEnumerable<Showtime>> GetByMovieId(Guid movieId)
-    {
-        return await _context.Showtimes
-        .Where(s => s.MovieId == movieId && s.IsActive)
-        .OrderBy(s => s.StartTime)
-        .ToListAsync();
-    }
-
-    // s.StartTime.Date == date.Date: compara solo el día, ignora la hora que venga en date.
-    public async Task<IEnumerable<Showtime>> GetByScreenAndDate(Guid screenId, DateTime date)
-    {
-        return await _context.Showtimes
-        .Where(s => s.ScreenId == screenId && s.IsActive && s.StartTime.Date == date.Date)
-        .OrderBy(s => s.StartTime)
-        .ToListAsync();
+        return rows.Select(r => new ShowtimeOccupancy(r.Id, r.StartTime, r.DurationMinutes, r.Title)).ToList();
     }
 }

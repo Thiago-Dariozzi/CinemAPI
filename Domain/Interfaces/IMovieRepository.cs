@@ -1,12 +1,15 @@
-using System;
 using Domain.Entities;
-using Domain.Interfaces;
 
 namespace Domain.Interfaces;
 
 public interface IMovieRepository : IBaseRepository<Movie>
 {
-    Task<IEnumerable<Movie>> GetByTitle(string title);
-    Task<IEnumerable<Movie>> GetActiveMovies();
-    Task<IEnumerable<Movie>> GetByGenre(Guid genreId);
+    Task<IReadOnlyList<Movie>> GetByTitleAsync(string title, CancellationToken ct);
+    // En cartelera, de un género o de todos.
+    Task<IReadOnlyList<Movie>> GetShowingMoviesAsync(Guid? genreId, CancellationToken ct);
+    Task<IReadOnlyList<Movie>> GetByGenreAsync(Guid genreId, CancellationToken ct);
+    Task<int> CountByGenreAsync(Guid genreId, CancellationToken ct);
+
+    // Incluye películas dadas de baja: una función existente sigue ocupando la sala.
+    Task<int?> GetDurationIncludingDeletedAsync(Guid movieId, CancellationToken ct);
 }

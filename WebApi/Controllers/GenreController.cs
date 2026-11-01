@@ -1,96 +1,63 @@
-using System;
+using Application.DTOs.Genres;
+using Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Application.Services;
-using Domain.Entities;
-using Domain.Exceptions;
+using WebApi.Security;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GenreController : ControllerBase
+[Authorize(Policy = Policies.Staff)]
+public sealed class GenreController(IGenreService genreService) : ControllerBase
 {
-    private readonly GenreService _genreService;
-
-    public GenreController(GenreService genreService)
-    {
-        _genreService = genreService;
-    }
-
+    [AllowAnonymous]
     [HttpGet]
-    public async Task<IActionResult> GetGenres()
-    {
-        var genres = await _genreService.GetAll();
-        return Ok(genres);
-    }
+    [ProducesResponseType<IReadOnlyList<GenreResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<GenreResponse>>> GetGenres(CancellationToken ct) =>
+        Ok(await genreService.GetAllAsync(ct));
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetGenre(Guid id)
-    {
-        var genre = await _genreService.GetById(id);
-        if (genre == null)
-        {
-            return NotFound();
-        }
-        return Ok(genre);
-    }
+    [AllowAnonymous]
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<GenreResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<GenreResponse>> GetGenre(Guid id, CancellationToken ct) =>
+        Ok(await genreService.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public async Task<IActionResult> CreateGenre([FromBody] Genre genre)
+    [ProducesResponseType<GenreResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<GenreResponse>> CreateGenre(CreateGenreRequest request, CancellationToken ct)
     {
-        try
-        {
-            var created = await _genreService.Add(genre);
-            return CreatedAtAction(nameof(GetGenre), new { id = created.Id }, created);
-        }
-        catch (GenreConflictException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var created = await genreService.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetGenre), new { id = created.Id }, created);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateGenre(Guid id, [FromBody] Genre genre)
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateGenre(Guid id, UpdateGenreRequest request, CancellationToken ct)
     {
-        if (id != genre.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del género.");
-        }
-
-        var existing = await _genreService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
-        try
-        {
-            await _genreService.Update(genre);
-            return NoContent();
-        }
-        catch (GenreConflictException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        await genreService.UpdateAsync(id, request, ct);
+        return NoContent();
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteGenre(Guid id)
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DeleteGenre(Guid id, CancellationToken ct)
     {
-        var existing = await _genreService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
-        try
-        {
-            await _genreService.Delete(id);
-            return NoContent();
-        }
-        catch (GenreConflictException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        await genreService.DeleteAsync(id, ct);
+        return NoContent();
     }
 }

@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet format:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet ef migrations list:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "PowerShell(dotnet build:*)",
+      "PowerShell(dotnet test:*)",
+      "PowerShell(dotnet format:*)",
+      "PowerShell(dotnet restore:*)",
+      "PowerShell(dotnet ef migrations add:*)",
+      "PowerShell(dotnet ef migrations list:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git show:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(dotnet ef database update:*)",
+      "Bash(dotnet ef migrations remove:*)",
+      "Bash(dotnet add package:*)",
+      "PowerShell(git push:*)",
+      "PowerShell(dotnet ef database update:*)",
+      "PowerShell(dotnet ef migrations remove:*)",
+      "PowerShell(dotnet add package:*)"
+    ],
+    "deny": [
+      "Read(./**/appsettings.*.local.json)",
+      "Read(./**/secrets.json)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.mjs\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

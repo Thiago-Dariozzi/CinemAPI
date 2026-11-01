@@ -1,59 +1,53 @@
-using System;
 using System.Globalization;
+using Application.DTOs.Genres;
+using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
 
 namespace Application.Services;
 
-public class GenreService
+public sealed class GenreService(
+    IGenreRepository genreRepository,
+    IMovieRepository movieRepository,
+    IUnitOfWork unitOfWork) : IGenreService
 {
-    private readonly IGenreRepository _repo;
-    private readonly IMovieRepository _movieRepo;
+    private const string EntityName = "el género";
 
-    public GenreService(IGenreRepository genreRepository, IMovieRepository movieRepository)
+    public async Task<IReadOnlyList<GenreResponse>> GetAllAsync(CancellationToken ct) =>
+        (await genreRepository.GetAllAsync(ct)).Select(g => g.ToResponse()).ToList();
+
+    public async Task<GenreResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
+
+    public async Task<GenreResponse> CreateAsync(CreateGenreRequest request, CancellationToken ct)
     {
-        _repo = genreRepository;
-        _movieRepo = movieRepository;
+        var name = NormalizeName(request.Name);
+        await EnsureNoDuplicateAsync(name, excludeId: null, ct);
+
+        var genre = new Genre { Id = Guid.NewGuid(), Name = name, IsActive = true };
+        genreRepository.Add(genre);
+        await SaveAsync(genre, ct);
+        return genre.ToResponse();
     }
 
-    public async Task<IEnumerable<Genre>> GetAll()
+    public async Task UpdateAsync(Guid id, UpdateGenreRequest request, CancellationToken ct)
     {
-        return await _repo.GetAll();
+        var genre = await GetEntityAsync(id, ct);
+
+        var name = NormalizeName(request.Name);
+        await EnsureNoDuplicateAsync(name, excludeId: genre.Id, ct);
+
+        genre.Name = name;
+        await SaveAsync(genre, ct);
     }
 
-    public async Task<Genre?> GetById(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        return await _repo.GetById(id);
-    }
+        var genre = await GetEntityAsync(id, ct);
 
-    public async Task<Genre> Add(Genre genre)
-    {
-        genre.Id = Guid.NewGuid();
-        genre.IsActive = true;
-        genre.Name = NormalizeName(genre.Name);
-
-        await EnsureNoDuplicate(genre.Name, excludeId: null);
-
-        return await _repo.Add(genre);
-    }
-
-    public async Task Update(Genre genre)
-    {
-        genre.Name = NormalizeName(genre.Name);
-
-        await EnsureNoDuplicate(genre.Name, excludeId: genre.Id);
-
-        await _repo.Update(genre);
-    }
-
-    public async Task Delete(Guid id)
-    {
-        var genre = await _repo.GetById(id);
-        if (genre == null) return;
-
-        var moviesUsingGenre = await _movieRepo.GetByGenre(id);
-        var moviesCount = moviesUsingGenre.Count();
+        var moviesCount = await movieRepository.CountByGenreAsync(id, ct);
         if (moviesCount > 0)
         {
             throw new GenreConflictException(
@@ -62,24 +56,48 @@ public class GenreService
         }
 
         genre.IsActive = false;
-        await _repo.Update(genre);
+        await unitOfWork.SaveChangesAsync(ct);
     }
+
+    // Dos pedidos simultáneos con el mismo nombre pueden pasar EnsureNoDuplicateAsync y chocar
+    // contra el índice único al guardar (#45): se busca el que ganó para responder el mismo 409.
+    private async Task SaveAsync(Genre genre, CancellationToken ct)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (UniqueConstraintConflictException)
+        {
+            await EnsureNoDuplicateAsync(genre.Name, excludeId: genre.Id, ct);
+            throw new GenreConflictException($"Ya existe un género equivalente: '{genre.Name}'.");
+        }
+    }
+
+    private async Task<Genre> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await genreRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
 
     // Trim + primera letra en mayúscula. No toca el resto del string (para no romper
     // nombres ya bien escritos como "Ciencia Ficción").
     private static string NormalizeName(string name)
     {
         var trimmed = (name ?? string.Empty).Trim();
-        if (trimmed.Length == 0) return trimmed;
-        return char.ToUpperInvariant(trimmed[0]) + trimmed.Substring(1);
+        if (trimmed.Length == 0)
+        {
+            return trimmed;
+        }
+
+        return char.ToUpperInvariant(trimmed[0]) + trimmed[1..];
     }
 
     // Dos géneros son "el mismo" si su nombre coincide ignorando mayúsculas/minúsculas Y
     // tildes/acentos ("Acción" == "Accion" == "ACCIÓN"). CompareOptions.IgnoreNonSpace
     // ignora los diacríticos (evita tener que normalizar Unicode a mano con FormD).
-    private async Task EnsureNoDuplicate(string normalizedName, Guid? excludeId)
+    // Queda en memoria a propósito: la collation de la base distingue "Año" de "Ano" y
+    // esta regla no. Los géneros son pocos y se leen sin tracking.
+    private async Task EnsureNoDuplicateAsync(string normalizedName, Guid? excludeId, CancellationToken ct)
     {
-        var existing = await _repo.GetAll();
+        var existing = await genreRepository.GetAllAsync(ct);
         var duplicate = existing.FirstOrDefault(g =>
             (excludeId == null || g.Id != excludeId.Value) &&
             CultureInfo.InvariantCulture.CompareInfo.Compare(

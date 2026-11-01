@@ -1,80 +1,62 @@
-using System;
+using Application.DTOs.Screens;
+using Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Application.Services;
-using Domain.Entities;
- 
+using WebApi.Security;
+
 namespace WebApi.Controllers;
- 
+
 [ApiController]
 [Route("api/[controller]")]
-public class ScreenController : ControllerBase
+[Authorize(Policy = Policies.Staff)]
+public sealed class ScreenController(IScreenService screenService) : ControllerBase
 {
-    private readonly ScreenService _screenService;
- 
-    public ScreenController(ScreenService screenService)
-    {
-        _screenService = screenService;
-    }
- 
-    // GET: api/screen
+    [AllowAnonymous]
     [HttpGet]
-    public async Task<IActionResult> GetScreens()
-    {
-        var screens = await _screenService.GetAll();
-        return Ok(screens);
-    }
- 
-    // GET: api/screen/{id}
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetScreen(Guid id)
-    {
-        var screen = await _screenService.GetById(id);
-        if (screen == null)
-        {
-            return NotFound();
-        }
-        return Ok(screen);
-    }
- 
-    // POST: api/screen
+    [ProducesResponseType<IReadOnlyList<ScreenResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ScreenResponse>>> GetScreens(CancellationToken ct) =>
+        Ok(await screenService.GetAllAsync(ct));
+
+    [AllowAnonymous]
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<ScreenResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ScreenResponse>> GetScreen(Guid id, CancellationToken ct) =>
+        Ok(await screenService.GetByIdAsync(id, ct));
+
     [HttpPost]
-    public async Task<IActionResult> CreateScreen([FromBody] Screen screen)
+    [ProducesResponseType<ScreenResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<ScreenResponse>> CreateScreen(CreateScreenRequest request, CancellationToken ct)
     {
-        var created = await _screenService.Add(screen);
+        var created = await screenService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetScreen), new { id = created.Id }, created);
     }
- 
-    // PUT: api/screen/{id}
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateScreen(Guid id, [FromBody] Screen screen)
+
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateScreen(Guid id, UpdateScreenRequest request, CancellationToken ct)
     {
-        if (id != screen.Id)
-        {
-            return BadRequest("El id de la ruta no coincide con el id del screen.");
-        }
- 
-        var existing = await _screenService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
- 
-        await _screenService.Update(screen);
+        await screenService.UpdateAsync(id, request, ct);
         return NoContent();
     }
- 
-    // DELETE: api/screen/{id}
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteScreen(Guid id)
+
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DeleteScreen(Guid id, CancellationToken ct)
     {
-        var existing = await _screenService.GetById(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
- 
-        await _screenService.Delete(id);
+        await screenService.DeleteAsync(id, ct);
         return NoContent();
     }
 }
- 

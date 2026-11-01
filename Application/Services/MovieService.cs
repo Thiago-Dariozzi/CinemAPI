@@ -1,64 +1,106 @@
-using System;
-using Domain.Interfaces;
+using Application.DTOs.Movies;
+using Application.Interfaces;
+using Application.Mappings;
 using Domain.Entities;
-using Application.Services;
-
+using Domain.Exceptions;
+using Domain.Interfaces;
 
 namespace Application.Services;
 
-public class MovieService
+public sealed class MovieService(
+    IMovieRepository movieRepository,
+    IGenreRepository genreRepository,
+    IShowtimeRepository showtimeRepository,
+    TimeProvider timeProvider,
+    IUnitOfWork unitOfWork) : IMovieService
 {
-    private readonly IMovieRepository _repo;
-    public MovieService(IMovieRepository movieRepository)
+    private const string EntityName = "la película";
+
+    // Con fecha: solo las que tienen una función ese día que todavía no empezó (hoy no cuentan las de la
+    // mañana que ya pasaron). Un día pasado no tiene ninguna.
+    public async Task<IReadOnlyList<MovieResponse>> GetShowingMoviesAsync(Guid? genreId, DateOnly? date, CancellationToken ct)
     {
-        _repo = movieRepository; 
+        if (date is { } requested)
+        {
+            DateRules.EnsureHasNextDay(requested);
+        }
+
+        var movies = await movieRepository.GetShowingMoviesAsync(genreId, ct);
+        if (date is not { } day)
+        {
+            return ToResponses(movies);
+        }
+
+        var dayStart = day.ToDateTime(TimeOnly.MinValue);
+        var now = timeProvider.Now();
+        // Igual que GetUpcomingAsync y la compra: la que empieza justo ahora ya no cuenta.
+        var from = now >= dayStart ? now.AddTicks(1) : dayStart;
+        var to = dayStart.AddDays(1);
+        if (from >= to)
+        {
+            return [];
+        }
+
+        var withShowtimes = (await showtimeRepository.GetMovieIdsWithShowtimesAsync(from, to, ct)).ToHashSet();
+        return ToResponses(movies.Where(m => withShowtimes.Contains(m.Id)));
     }
 
-    public async Task<IEnumerable<Movie>> GetActiveMovies()
-    {
-        return await _repo.GetActiveMovies();
-    }
+    public async Task<IReadOnlyList<MovieResponse>> GetByGenreAsync(Guid genreId, CancellationToken ct) =>
+        ToResponses(await movieRepository.GetByGenreAsync(genreId, ct));
 
-    public async Task<IEnumerable<Movie>> GetByGenre(Guid genreId)
-    {
-        return await _repo.GetByGenre(genreId);
-    }
+    public async Task<IReadOnlyList<MovieResponse>> GetByTitleAsync(string title, CancellationToken ct) =>
+        ToResponses(await movieRepository.GetByTitleAsync(title, ct));
 
-    public async Task<IEnumerable<Movie>> GetByTitle(string title)
-    {
-        return await _repo.GetByTitle(title);
-    }
+    public async Task<IReadOnlyList<MovieResponse>> GetAllAsync(CancellationToken ct) =>
+        ToResponses(await movieRepository.GetAllAsync(ct));
 
+    public async Task<MovieResponse> GetByIdAsync(Guid id, CancellationToken ct) =>
+        (await GetEntityAsync(id, ct)).ToResponse();
 
-    public async Task<IEnumerable<Movie>> GetAll()
+    public async Task<MovieResponse> CreateAsync(CreateMovieRequest request, CancellationToken ct)
     {
-        return await _repo.GetAll();
-    }
+        var movie = request.ToEntity();
+        await EnsureGenreExistsAsync(movie.GenreId, ct);
 
-    public async Task<Movie?> GetById(Guid id)
-    {
-        return await _repo.GetById(id);
-    }
-
-    public async Task<Movie?> Add(Movie movie)
-    {
         movie.Id = Guid.NewGuid();
         movie.IsActive = true;
-        return await _repo.Add(movie);
+        movieRepository.Add(movie);
+        await unitOfWork.SaveChangesAsync(ct);
+        return movie.ToResponse();
     }
 
-    public async Task Delete(Guid id)
+    public async Task UpdateAsync(Guid id, UpdateMovieRequest request, CancellationToken ct)
     {
-        var movie = await _repo.GetById(id);
-        if (movie != null)
+        var movie = await GetEntityAsync(id, ct);
+
+        // Solo si cambia: una película cuyo género se dio de baja se puede seguir editando.
+        if (request.GenreId != movie.GenreId)
         {
-            movie.IsActive = false;
-            await _repo.Update(movie);
+            await EnsureGenreExistsAsync(request.GenreId.GetValueOrDefault(), ct);
+        }
+
+        request.ApplyTo(movie);
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var movie = await GetEntityAsync(id, ct);
+        movie.IsActive = false;
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    private async Task<Movie> GetEntityAsync(Guid id, CancellationToken ct) =>
+        await movieRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(EntityName, id);
+
+    private async Task EnsureGenreExistsAsync(Guid genreId, CancellationToken ct)
+    {
+        if (!await genreRepository.ExistsAsync(genreId, ct))
+        {
+            throw new InvalidReferenceException("el género", genreId);
         }
     }
-    public async Task Update(Movie movie)
-    {
-        await _repo.Update(movie);
-    }
 
+    private static List<MovieResponse> ToResponses(IEnumerable<Movie> movies) =>
+        movies.Select(m => m.ToResponse()).ToList();
 }
