@@ -18,6 +18,6 @@ public sealed record CreateMovieRequest(
     string? ImageUrl,
     [Required(ErrorMessage = "La fecha de estreno es obligatoria.")]
     DateTime? ReleaseDate,
-    [Range(0, 1_000_000, ErrorMessage = "El precio sugerido debe estar entre 0 y 1.000.000.")]
+    [Range(0.01d, 1_000_000d, ErrorMessage = "El precio sugerido debe ser mayor a 0 y no superar 1.000.000.")]
     decimal? SuggestedPrice,
     bool IsShowing = true);

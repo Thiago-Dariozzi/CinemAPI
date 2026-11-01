@@ -75,6 +75,28 @@ public sealed class MovieApiTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
+    // Un precio sugerido de 0 se mostraba como "Sugerido: $0"; sin precio de referencia va vacío (null).
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task Create_WithASuggestedPriceOfZeroOrLess_Returns400(int suggestedPrice)
+    {
+        using var asAdmin = api.CreateClient(api.AdminToken);
+        var genreId = await CreateGenreAsync(asAdmin);
+
+        var response = await asAdmin.PostAsJsonAsync("/api/movie", new
+        {
+            title = "Precio cero",
+            durationMinutes = 100,
+            genreId,
+            releaseDate = "2026-03-15",
+            suggestedPrice,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("El precio sugerido debe ser mayor a 0 y no superar 1.000.000.", await ErrorMessagesAsync(response));
+    }
+
     private static async Task<Guid> CreateGenreAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync("/api/genre", new { name = $"Género {Guid.NewGuid():N}"[..20] });
