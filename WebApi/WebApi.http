@@ -155,7 +155,7 @@ Content-Type: application/json
   "synopsis": "Creada desde WebApi.http",
   "durationMinutes": 110,
   "genreId": "{{genreId}}",
-  "imageUrl": "",
+  "imageUrl": "https://picsum.photos/seed/prueba/300/450",
   "releaseDate": "2026-11-01T00:00:00",
   "suggestedPrice": 12.5,
   "isShowing": true

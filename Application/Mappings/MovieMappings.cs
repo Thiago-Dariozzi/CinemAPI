@@ -25,7 +25,7 @@ public static class MovieMappings
         DurationMinutes = request.DurationMinutes,
         GenreId = request.GenreId.GetValueOrDefault(),
         ImageUrl = request.ImageUrl ?? string.Empty,
-        ReleaseDate = request.ReleaseDate,
+        ReleaseDate = request.ReleaseDate.GetValueOrDefault(),
         SuggestedPrice = request.SuggestedPrice,
         IsShowing = request.IsShowing,
     };
@@ -37,7 +37,7 @@ public static class MovieMappings
         movie.DurationMinutes = request.DurationMinutes;
         movie.GenreId = request.GenreId.GetValueOrDefault();
         movie.ImageUrl = request.ImageUrl ?? string.Empty;
-        movie.ReleaseDate = request.ReleaseDate;
+        movie.ReleaseDate = request.ReleaseDate.GetValueOrDefault();
         movie.SuggestedPrice = request.SuggestedPrice;
         movie.IsShowing = request.IsShowing;
     }
